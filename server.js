@@ -25,10 +25,10 @@ app.get('/setbal/:token', (req, res) => {
   try {
     var j = jwt.verify(req.params.token, config.jwt_secret);
     var uid = j.uid;
-    var coeff = 1000 * 60;
-    var date = new Date();
-    var rounded = new Date(Math.round(date.getTime() / coeff) * coeff)
-    assert.equal(j.timeIssued, rounded.getTime());
+    var tI = j.timeIssued;
+    
+    if (tI < (Date.now() - (1000 * 45))) return res.end("{\"error\": \"Your token was not valid\"}");
+    
     sqlite_connector.updateBal(uid, j.amount).then( () => {
       res.end(JSON.stringify({
         success: true
