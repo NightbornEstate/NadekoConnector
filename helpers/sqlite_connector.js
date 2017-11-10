@@ -21,7 +21,7 @@ module.exports.getBal = function(uid) {
 }
 module.exports.updateBal = function(uid, amount) {
   return new Promise( function (resolve, reject) {
-    let db = new sqlite3.Database(path.join("..", config.nadeko_db_path), (err) => {
+    let db = new sqlite3.Database(path.join(config.nadeko_db_path), (err) => {
       if (err) {
         console.error(err.message);
       }
