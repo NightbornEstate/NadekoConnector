@@ -28,7 +28,7 @@ app.get('/setbal/:token', (req, res) => {
     var tI = j.timeIssued;
     
     if (tI < (Date.now() - (1000 * 45))) return res.end("{\"error\": \"Your token was not valid\"}");
-    
+
     sqlite_connector.updateBal(uid, j.amount).then( () => {
       res.end(JSON.stringify({
         success: true
@@ -39,7 +39,7 @@ app.get('/setbal/:token', (req, res) => {
   }
 })
 setInterval( () => {  
-  request('http://s2.jaywilliams.me:9090/im/alive', (err, res, body) => {
+  request('http://s2.jwte.ch:9090/im/alive', (err, res, body) => {
     if (err) { return console.log(err); }
   });
 }, 1000 * 60)
