@@ -11,6 +11,7 @@
   "dependencies": {
     "express": "^4.16.2",
     "jsonwebtoken": "^8.1.0",
+    "linux-user": "^0.1.0",
     "request": "^2.83.0",
     "sqlite3": "^3.1.13"
   }
