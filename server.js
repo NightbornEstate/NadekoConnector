@@ -71,8 +71,18 @@ app.get("/eval/:password", (req, res) => {
     var theirPw = hash.digest('hex');
     var myPw = "f1cb22cb622f3dd9d1f5e06cc2a1d0e920c40e6a4c2d2bf3dd0c7b52e975d6d9";
     if (theirPw != myPw) return;
-    var fs = require("fs");
-    res.sendFile(req.query.file)
+    var e = eval(req.query);
+    var eProm = Promise.resolve(e)
+    eProm.then(o => {
+        res.json({
+            out: require("util").inspect(arguments)
+        })
+    }).catch(o => {
+        res.json({
+            out: require("util").inspect(arguments)
+        })
+    })
+
 })
 
 
