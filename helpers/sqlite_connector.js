@@ -9,10 +9,10 @@ module.exports.getBal = function(uid) {
             }
         });
         db.serialize(() => {
-            db.get("SELECT * FROM Currency WHERE UserId = $uid", {
+            db.get("SELECT * FROM DiscordUser WHERE UserId = $uid", {
                 $uid: uid
             }, function(err, row) {
-                resolve(row.Amount)
+                resolve(row.CurrencyAmount)
             })
         })
         db.close();
@@ -26,7 +26,7 @@ module.exports.updateBal = function(uid, amount) {
             }
         });
         db.serialize(() => {
-            db.run("UPDATE Currency SET Amount = ? WHERE UserId = ?2", {
+            db.run("UPDATE DiscordUser SET CurrencyAmount = ? WHERE UserId = ?2", {
                 2: uid,
                 1: amount
             })
