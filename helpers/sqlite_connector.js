@@ -61,3 +61,22 @@ module.exports.addTransaction = function (uid, amount, reason) {
         db.close();
     })
 }
+
+module.exports.getGuildXp = function (uid, guildId) {
+    return new Promise(function (resolve, reject) {
+        let db = new sqlite3.Database(path.join(config.nadeko_db_path), (err) => {
+            if (err) {
+                console.error(err.message);
+            }
+        });
+        db.serialize(() => {
+            db.get("SELECT * FROM UserXpStats WHERE UserId = $uid AND GuildId = $guildid", {
+                $uid: uid,
+                $guildid: guildId
+            }, function (err, row) {
+                resolve([row.Xp, row.AwardedXp])
+            })
+        })
+        db.close();
+    })
+}
