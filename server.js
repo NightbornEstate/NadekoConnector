@@ -70,4 +70,4 @@ app.use('/getguildxp/:token', function (req, res) {
     }
 });
 
-app.listen(3000, () => console.log("NadekoConnector listening at port 3000."));
+app.listen(config.port, () => console.log("NadekoConnector listening at port "+config.port+"."));
