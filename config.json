@@ -1,4 +1,5 @@
 {
     "jwt_secret": "yourawesomepasswordhere",
-    "nadeko_db_path": "/NadekoBot/src/NadekoBot/bin/Release/netcoreapp2.0/data/nadekobot.db"
+    "nadeko_db_path": "/NadekoBot/src/NadekoBot/bin/Release/netcoreapp2.0/data/nadekobot.db",
+    "port":3000
 }
