@@ -17,3 +17,5 @@ Adds a currency transaction for a given Discord user ID with the amount and reas
 Does not modify the amount by itself. Automatically adds UTC timestamps to the transaction. 
 ### getguildxp
 Gets the XP of a Discord user with specified user ID and guild ID.
+### updateguildxp
+Adds (awarded) XP for a given Discord user ID with the amount. 
