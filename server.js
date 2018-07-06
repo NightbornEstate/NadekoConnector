@@ -1,8 +1,10 @@
+//jshint esversion:6
 var express = require('express');
 var app = express();
 var jwt = require("jsonwebtoken");
 var config = require("./config.json");
 var sqlite_connector = require("./helpers/sqlite_connector");
+var utils = require('./utils.js');
 
 app.use('/getbal/:token', function (req, res) {
     try {
@@ -93,10 +95,14 @@ app.use('/getguildxp/:token', function (req, res) {
         }
         sqlite_connector.getGuildXp(obj.uid, obj.guildId)
             .then((xp) => {
+                let levelInfo = utils.calcLevel(xp[0] + xp[1]);
                 res.end(JSON.stringify({
                     guildxp: xp[0],
                     awardedxp: xp[1],
                     totalxp: xp[0] + xp[1],
+                    level: levelInfo.level,
+                    currentLevelXp: levelInfo.currentLevelXp,
+                    nextLevelXp: levelInfo.nextLevelXp,
                     success: true
                 }));
             });

@@ -1,10 +1,11 @@
+//jshint esversion:6
 var sqlite3 = require('sqlite3');
 var config = require('../config.json');
 var path = require('path');
 var leftPad = require('left-pad');
 var pad = (num) => leftPad(num, 2, 0);
 
-module.exports.getBal = function (uid) {
+var getBal = function (uid) {
     return new Promise(function (resolve, reject) {
         let db = new sqlite3.Database(path.join(config.nadeko_db_path), (err) => {
             if (err) {
@@ -22,7 +23,7 @@ module.exports.getBal = function (uid) {
     });
 };
 
-module.exports.updateBal = function (uid, amount) {
+var updateBal = function (uid, amount) {
     return new Promise(function (resolve, reject) {
         let db = new sqlite3.Database(path.join(config.nadeko_db_path), (err) => {
             if (err) {
@@ -40,7 +41,7 @@ module.exports.updateBal = function (uid, amount) {
     });
 };
 
-module.exports.addTransaction = function (uid, amount, reason) {
+var addTransaction = function (uid, amount, reason) {
     let now = new Date();
     let date = now.getUTCFullYear() + '-' + pad(now.getUTCMonth() + 1) + '-' + pad(now.getUTCDate()) + ' ' + pad(now.getUTCHours()) + ':' + pad(now.getUTCMinutes()) + ':' + pad(now.getUTCSeconds() + '.' + pad(now.getUTCMilliseconds()));
     return new Promise(function (resolve, reject) {
@@ -62,7 +63,7 @@ module.exports.addTransaction = function (uid, amount, reason) {
     });
 };
 
-module.exports.getGuildXp = function (uid, guildId) {
+var getGuildXp = function (uid, guildId) {
     return new Promise(function (resolve, reject) {
         let db = new sqlite3.Database(path.join(config.nadeko_db_path), (err) => {
             if (err) {
@@ -81,7 +82,7 @@ module.exports.getGuildXp = function (uid, guildId) {
     });
 };
 
-module.exports.updateGuildXp = function (uid, guildId, xp) {
+var updateGuildXp = function (uid, guildId, xp) {
     return new Promise(function (resolve, reject) {
         let db = new sqlite3.Database(path.join(config.nadeko_db_path), (err) => {
             if (err) {
@@ -99,3 +100,9 @@ module.exports.updateGuildXp = function (uid, guildId, xp) {
         db.close();
     });
 };
+
+exports.getBal = getBal;
+exports.updateBal = updateBal;
+exports.addTransaction = addTransaction;
+exports.getGuildXp = getGuildXp;
+exports.updateGuildXp = updateGuildXp;
