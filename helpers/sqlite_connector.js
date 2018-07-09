@@ -101,8 +101,31 @@ var updateGuildXp = function (uid, guildId, xp) {
     });
 };
 
+
+// untested code vvv
+var getXpLeaderboard = function (guildId, itemPosition, itemsPerPage) {
+    return new Promise(function (resolve, reject) {
+        let db = new sqlite3.Database(path.join(config.nadeko_db_path), (err) => {
+            if (err) {
+                console.error(err.message);
+            }
+        });
+        db.serialize(() => {
+            db.all("SELECT UserId, Xp, AwardedXp FROM UserXpStats WHERE GuildId=$guildId ORDER BY (Xp+AwardedXp) DESC;", {
+                $guildId: guildId
+            }, function (err, rows) {
+                let rowSelection = rows.slice((itemPosition-1), (itemPosition+itemsPerPage-1));
+                resolve(rowSelection);
+            });
+        });
+        db.close();
+    });
+};
+// untested code ^^^
+
 exports.getBal = getBal;
 exports.updateBal = updateBal;
 exports.addTransaction = addTransaction;
 exports.getGuildXp = getGuildXp;
 exports.updateGuildXp = updateGuildXp;
+exports.getXpLeaderboard = getXpLeaderboard;

@@ -58,5 +58,8 @@ typings/
 # dotenv environment variables file
 .env
 
+# Test files
 NadekoBot.db
 test.js
+NadekoBot.db-wal
+NadekoBot.db-shm
