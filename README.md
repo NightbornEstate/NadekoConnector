@@ -3,19 +3,20 @@
 
 ## Setup
 - Run `npm i` to install all required dependencies. 
-- Replace the path to `NadekoBot.db` in `config.json` .
-- Change the `jwt_secret` key in `config.json`. Optional but recommended. 
+- Set the paths to `NadekoBot.db` and `credentials.json` in `config.json`.
+- Modify the `password` in `config.json`. 
+- Run `node server.js`. 
 
 ## Endpoints
+- getBotInfo
+- getBalance
+- setBalance
+- createTransaction
+- getGuildXp
+- setGuildXp
+- getXpLeaderboard
+- getXpRoleRewards
+- getXpCurrencyRewards
 
-### getbal
-Gets the currency balance for a given Discord user ID.  
-### setbal
-Updates the currency balance for a given Discord user ID.
-### addtransaction
-Adds a currency transaction for a given Discord user ID with the amount and reason.
-Does not modify the amount by itself. Automatically adds UTC timestamps to the transaction. 
-### getguildxp
-Gets the XP of a Discord user with specified user ID and guild ID.
-### updateguildxp
-Adds (awarded) XP for a given Discord user ID with the amount. 
+## Compatibility
+Does not work with NodeJS 9 and 10 due to errors in the `sqlite3` package. NodeJS 8.x recommended. 

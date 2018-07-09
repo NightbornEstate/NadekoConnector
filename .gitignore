@@ -59,7 +59,8 @@ typings/
 .env
 
 # Test files
-NadekoBot.db
 test.js
+NadekoBot.db
 NadekoBot.db-wal
 NadekoBot.db-shm
+credentials.json

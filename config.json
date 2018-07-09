@@ -1,5 +1,18 @@
 {
-    "jwt_secret": "yourawesomepasswordhere",
-    "nadeko_db_path": "/NadekoBot/src/NadekoBot/bin/Release/netcoreapp2.0/data/nadekobot.db",
-    "port":3000
+    "password": "yourawesomepasswordhere",
+    "bot": {
+        "db": "/absolute/path/to/NadekoBot.db",
+        "credentials": "/absolute/path/to/credentials.json"
+    },
+    "port": 3000,
+    "endpoints": {
+        "getBalance": true,
+        "setBalance": true,
+        "createTransaction": true,
+        "getGuildXp": true,
+        "setGuildXp": true,
+        "getXpLeaderboard": true,
+        "getXpRoleRewards": true,
+        "getXpCurrencyRewards": true
+    }
 }
