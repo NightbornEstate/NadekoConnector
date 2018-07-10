@@ -18,6 +18,7 @@ if (config.endpoints.getBalance === true) {
             }
             connector.getBalance(obj.userId)
                 .then((bal) => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     res.end(JSON.stringify({
                         balance: bal,
                         success: true
@@ -47,6 +48,7 @@ if (config.endpoints.setBalance === true) {
             }
             connector.setBalance(obj.userId, obj.amount)
                 .then(() => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     res.end(JSON.stringify({
                         success: true
                     }));
@@ -75,6 +77,7 @@ if (config.endpoints.createTransaction === true) {
             }
             connector.createTransaction(obj.userId, obj.amount, obj.reason)
                 .then(() => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     res.end(JSON.stringify({
                         success: true
                     }));
@@ -103,6 +106,7 @@ if (config.endpoints.getGuildXp === true) {
             }
             connector.getGuildXp(obj.userId, obj.guildId)
                 .then((xp) => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     let levelInfo = utils.calcLevel(xp[0] + xp[1]);
                     res.end(JSON.stringify({
                         guildxp: xp[0],
@@ -138,6 +142,7 @@ if (config.endpoints.setGuildXp === true) {
             }
             connector.setGuildXp(obj.userId, obj.guildId, obj.amount)
                 .then(() => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     res.end(JSON.stringify({
                         success: true
                     }));
@@ -166,6 +171,7 @@ if (config.endpoints.getXpLeaderboard === true) {
             }
             connector.getXpLeaderboard(obj.guildId, obj.startPosition, obj.items)
                 .then((xpLeaderboard) => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     res.end(JSON.stringify({
                         leaderboard: xpLeaderboard,
                         success: true
@@ -196,6 +202,7 @@ if (config.endpoints.getXpRoleRewards === true) {
             }
             connector.getXpRoleRewards(obj.guildId)
                 .then((roleRewards) => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     res.end(JSON.stringify({
                         xpRoleRewards: roleRewards,
                         success: true
@@ -225,6 +232,7 @@ if (config.endpoints.getXpCurrencyRewards === true) {
             }
             connector.getXpCurrencyRewards(obj.guildId)
                 .then((roleRewards) => {
+                    res.set({ 'content-type': 'application/json; charset = utf-8' });
                     res.end(JSON.stringify({
                         xpRoleRewards: roleRewards,
                         success: true
@@ -243,10 +251,11 @@ if (config.endpoints.getXpCurrencyRewards === true) {
     });
 }
 
-app.use('/getbotinfo', function (req, res) {
+app.get('/getbotinfo', function (req, res) {
     try {
         utils.getBotInfo()
             .then((info) => {
+                res.set({ 'content-type': 'application/json; charset = utf-8' });
                 res.end(JSON.stringify({
                     bot: info,
                     success: true
