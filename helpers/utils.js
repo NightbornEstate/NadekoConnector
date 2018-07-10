@@ -3,6 +3,7 @@ var config = require('../config.json');
 var credentials = require(config.bot.credentials);
 var sqlite3 = require('sqlite3');
 var os = require('os');
+var path = require('path');
 
 var getBotInfo = function () {
     return new Promise(function (resolve, reject) {
