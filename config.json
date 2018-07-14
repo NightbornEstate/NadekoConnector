@@ -6,13 +6,18 @@
     },
     "port": 3000,
     "endpoints": {
+        "getBotInfo": true,
+        "getTables": false,
+        "getFields": false,
         "getBalance": true,
         "setBalance": true,
         "createTransaction": true,
+        "getTransactions": true,
         "getGuildXp": true,
         "setGuildXp": true,
-        "getXpLeaderboard": true,
-        "getXpRoleRewards": true,
-        "getXpCurrencyRewards": true
+        "getGuildXpLeaderboard": true,
+        "getGlobalXpLeaderboard": true,
+        "getGuildXpRoleRewards": true,
+        "getGuildXpCurrencyRewards": true
     }
 }
