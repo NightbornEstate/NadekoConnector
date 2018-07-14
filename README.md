@@ -9,14 +9,18 @@
 
 ## Endpoints
 - getBotInfo
+- getTables
+- getFields
 - getBalance
 - setBalance
 - createTransaction
+- getTransactions
 - getGuildXp
 - setGuildXp
-- getXpLeaderboard
-- getXpRoleRewards
-- getXpCurrencyRewards
+- getGuildXpLeaderboard
+- getGlobalXpLeaderboard
+- getGuildXpRoleRewards
+- getGuildXpCurrencyRewards
 
 ## Compatibility
-Does not work with NodeJS 9 and 10 due to errors in the `sqlite3` package. NodeJS 8.x recommended. 
+Does not work with NodeJS 9 and 10 due to errors in the `sqlite3` package. NodeJS 8.x LTS recommended. 
