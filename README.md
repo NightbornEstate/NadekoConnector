@@ -18,9 +18,7 @@
 - getGuildXp
 - setGuildXp
 - getGuildXpLeaderboard
-- getGlobalXpLeaderboard
 - getGuildXpRoleRewards
 - getGuildXpCurrencyRewards
-
-## Compatibility
-Does not work with NodeJS 9 and 10 due to errors in the `sqlite3` package. NodeJS 8.x LTS recommended. 
+- getGlobalXp
+- getGlobalXpLeaderboard
