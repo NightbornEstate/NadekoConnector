@@ -1,8 +1,8 @@
+var utils = require("./utils.js");
 var express = require("express");
 var app = express();
-var utils = require("./helpers/utils.js");
-var config = require("./config.json");
-var package = require("./package.json");
+var config = utils.readJson("./config.json");
+var package = utils.readJson("./package.json");
 var log = require("fancy-log");
 var helmet = require("helmet");
 
@@ -11,13 +11,14 @@ app.enable("trust proxy");
 app.use(function (req, res, next) {
 	try {
 		res.append("content-type", "application/json; charset = utf-8");
-		let token = utils.parseToken(req.url.split("/")[2]);
-		if (!token.success)
-			log(`${req.ip.split(":")[3]} ${req.method} ${req.url.split("/")[1]} ${req.url.split("/")[2]}`);
-		if (token.success) {
-			delete token["iat"];
-			delete token["success"];
-			log(`${req.ip.split(":")[3]} ${req.method} ${req.url.split("/")[1]} ${JSON.stringify(token)}`);
+		var token = req.url.split("/")[2];
+		var parsedToken = utils.parseToken(config, token);
+		if (!parsedToken.success)
+			log(`${req.ip.split(":")[3]} ${req.method} ${req.url.split("/")[1]} ${token}`);
+		if (parsedToken.success) {
+			delete parsedToken["iat"];
+			delete parsedToken["success"];
+			log(`${req.ip.split(":")[3]} ${req.method} ${req.url.split("/")[1]} ${utils.stringify(parsedToken)}`);
 		}
 	} catch (error) {
 		log(`Error: ${error.message}`);
@@ -25,7 +26,7 @@ app.use(function (req, res, next) {
 	next();
 });
 
-let activeEndpoints = utils.getActiveEndpoints().activeEndpoints;
+var activeEndpoints = utils.getActiveEndpoints(config).activeEndpoints;
 
 activeEndpoints.forEach((endpoint) => {
 	if (config.endpoints[endpoint]) {

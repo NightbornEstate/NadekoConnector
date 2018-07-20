@@ -1,11 +1,23 @@
-var config = require("../config.json");
-var connector = require("./connector.js");
+// var connector = require("./connector.js");
 var jwt = require("jsonwebtoken");
+var jsonbs = require("json-bigint")({ storeAsString: true });
 var os = require("os");
 var fs = require("fs");
+var path = require("path");
+var log = require("fancy-log");
+
+var readJson = function (pathToFile) {
+	if (!fs.existsSync(pathToFile))
+		throw new Error("File not found.");
+	let data = fs.readFileSync(pathToFile).toString();
+	var info = jsonbs.parse(data);
+	return info;
+};
 
 var handleEndpoint = async function (token, endpoint) {
-	let obj = parseToken(token);
+	let connector = require("./connector.js");
+	let config = readJson("./config.json");
+	let obj = parseToken(config, token);
 	if (!obj.success)
 		return failure(obj);
 	let data = checkProperties(obj, endpoint);
@@ -16,6 +28,8 @@ var handleEndpoint = async function (token, endpoint) {
 		return failure(info);
 	return success(info);
 };
+
+var stringify = data => jsonbs.stringify(data, null, 0);
 
 var calcLevel = (xp) => {
 	try {
@@ -46,7 +60,7 @@ var success = function (data, stringify) {
 		data = {};
 	data["success"] = true;
 	if (stringify)
-		return JSON.stringify(data, null, 4);
+		return jsonbs.stringify(data, null, 4);
 	return data;
 };
 
@@ -57,16 +71,16 @@ var failure = function (data, stringify) {
 		data["error"] = "An error occured.";
 	data["success"] = false;
 	if (stringify)
-		return JSON.stringify(data, null, 4);
+		return jsonbs.stringify(data, null, 4);
 	return data;
 };
 
 // for future usage
-var updateConfig = function (property, value) {
-	let newConfig = config;
+var updateConfig = function (config, property, value) {
+	let newConfig = readJson("../config.json");
 	newConfig[property] = value;
 	try {
-		fs.writeFileSync("../config.json", JSON.stringify(newConfig, null, 4), "utf8");
+		fs.writeFileSync(path.resolve("../config.json"), jsonbs.stringify(newConfig, null, 4), "utf8");
 		return success();
 	} catch (error) {
 		return failure({ error: error.message });
@@ -93,7 +107,7 @@ var getIpAddress = function () {
 	}
 };
 
-var getActiveEndpoints = function () {
+var getActiveEndpoints = function (config) {
 	try {
 		let activeEndpoints = [];
 		let endpoints = Object.keys(config.endpoints);
@@ -108,7 +122,7 @@ var getActiveEndpoints = function () {
 	}
 };
 
-var parseToken = function (token, endpoint) {
+var parseToken = function (config, token) {
 	var obj;
 	try {
 		obj = jwt.verify(token, config.password);
@@ -132,28 +146,18 @@ var checkProperties = function (obj, endpoint) {
 };
 
 var getRequiredKeys = function (endpoint) {
-	// let allEndpoints = [
-	// 	"getBotInfo",
-	// 	"getTables",
-	// 	"getFields",
-	// 	"getBalance",
-	// 	"setBalance",
-	// 	"createTransaction",
-	// 	"getTransactions",
-	// 	"getGuildXp",
-	// 	"setGuildXp",
-	// 	"getGuildXpLeaderboard",
-	// 	"getGlobalXpLeaderboard",
-	// 	"getGuildXpRoleRewards",
-	// 	"getGuildXpCurrencyRewards"];
 	switch (endpoint) {
 		case "getBotInfo":
 		case "getTables":
-		case "getGlobalXpLeaderboard":
 			return success({
 				keys: []
 			});
+		case "getFields":
+			return success({
+				keys: ["table"]
+			});
 		case "getBalance":
+		case "getGlobalXp":
 			return success({
 				keys: ["userId"]
 			});
@@ -171,9 +175,11 @@ var getRequiredKeys = function (endpoint) {
 			});
 		case "setGuildXp":
 			return success({
-				keys: ["userId", "guildId", "xp", "awardedXp"]
+				keys: ["userId", "guildId", "awardedXp"]
 			});
 		case "getGuildXpLeaderboard":
+		case "getGuildXpRoleRewards":
+		case "getGuildXpCurrencyRewards":
 			return success({
 				keys: ["guildId", "startPosition", "items"]
 			});
@@ -181,23 +187,25 @@ var getRequiredKeys = function (endpoint) {
 			return success({
 				keys: ["userId", "startPosition", "items"]
 			});
-		case "getGuildXpRoleRewards":
-		case "getGuildXpCurrencyRewards":
+		case "getGlobalXpLeaderboard":
 			return success({
-				keys: ["guildId"]
-			});
-		case "getFields":
-			return success({
-				keys: ["tableName"]
+				keys: ["startPosition", "items"]
 			});
 		default:
 			return failure();
 	}
 };
 
+var logAsync = async function (data) {
+	log(await Promise.resolve(data));
+};
+
+exports.logAsync = logAsync;
 exports.success = success;
 exports.failure = failure;
+exports.stringify = stringify;
 exports.calcLevel = calcLevel;
+exports.readJson = readJson;
 exports.updateConfig = updateConfig; // for future usage
 exports.getIpAddress = getIpAddress;
 exports.getActiveEndpoints = getActiveEndpoints;

@@ -59,7 +59,7 @@ typings/
 .env
 
 # Test files
-test.js
+test*.js
 NadekoBot.db
 NadekoBot.db-wal
 NadekoBot.db-shm
