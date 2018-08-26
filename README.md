@@ -3,22 +3,26 @@
 
 ## Setup
 - Run `npm i` to install all required dependencies. 
-- Set the paths to `NadekoBot.db` and `credentials.json` in `config.json`.
-- Modify the `password` in `config.json`. 
-- Run `node server.js`. 
+- Set the bot configuration (databasePath, credentialsPath, port and password) in `config.json`
+- Run `node main.js`. 
 
 ## Endpoints
 - getBotInfo
 - getTables
 - getFields
-- getBalance
-- setBalance
+- execSql
+- getCurrency
+- setCurrency
+- addCurrency
 - createTransaction
 - getTransactions
 - getGuildXp
 - setGuildXp
+- getGuildRank
 - getGuildXpLeaderboard
 - getGuildXpRoleRewards
 - getGuildXpCurrencyRewards
 - getGlobalXp
+- getGlobalRank
 - getGlobalXpLeaderboard
+- getClubs
