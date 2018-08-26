@@ -9,12 +9,13 @@
     },
     "rules": {
         "no-console": "off",
+        "no-constant-condition":"off",
         "indent": "off",
         "no-unused-vars": "off",
         "no-empty-pattern": "off",
         "linebreak-style": [
             "error",
-            "windows"
+            "unix"
         ],
         "quotes": [
             "error",
