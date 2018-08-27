@@ -1,16 +1,28 @@
-# NadekoConnector
-Exposes the Nadeko db for modification through endpoints on localhost. Requires signed JSONWebTokens. 
+<h1 align=center>NadekoConnector</h1>
+<p align=center><b>Exposes parts of the NadekoBot database for modification through JSONWebTokens. </b></p>
 
 ## Setup
-Run `npm i` & replace the path to `NadekoBot.db` and change the `jwt_secret` key. 
+- Run `npm i` to install all required dependencies. 
+- Set the bot configuration (databasePath, credentialsPath, port and password) in `config.json`
+- Run `node main.js`. 
 
 ## Endpoints
-### getbal
-Gets the currency balance for a given uid. Returns `balance`.
-### setbal
-Updates the currency balance for a given uid. Returns `success`.
-### addtransaction
-Adds a currency transaction for given uid with the amount and reason. Returns `success`.
-Does not modify the amount by itself. Automatically adds UTC timestamps to the transaction. 
-### getguildxp
-Gets the XP of a user with specified guildId and uid. Returns `guildXp`, `awardedXp` and `totalXp`. 
+- getBotInfo
+- getTables
+- getFields
+- execSql
+- getCurrency
+- setCurrency
+- addCurrency
+- createTransaction
+- getTransactions
+- getGuildXp
+- setGuildXp
+- getGuildRank
+- getGuildXpLeaderboard
+- getGuildXpRoleRewards
+- getGuildXpCurrencyRewards
+- getGlobalXp
+- getGlobalRank
+- getGlobalXpLeaderboard
+- getClubs

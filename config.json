@@ -1,5 +1,11 @@
 {
-    "jwt_secret": "yourawesomepasswordhere",
-    "nadeko_db_path": "/NadekoBot/src/NadekoBot/bin/Release/netcoreapp2.0/data/nadekobot.db",
-    "port":3000
+    "bots": [
+        {
+            "credentialsPath": "/absolute/path/to/credentials.json",
+            "databasePath": "/absolute/path/to/NadekoBot.db",
+            "password": "yourawesomepasswordhere",
+            "port": 3000,
+            "disabledEndpoints": []
+        }
+    ]
 }
