@@ -34,6 +34,9 @@ class Connector {
 			"getGuildRank",
 			"getGuildXp",
 			"setGuildXp",
+			"addGuildXp",
+			"subtractGuildXp",
+			"awardGuildXp",
 			"getGuildXpLeaderboard",
 			"getGuildXpRoleRewards",
 			"getGuildXpCurrencyRewards",
@@ -464,6 +467,48 @@ class Connector {
 	}
 
 	/**
+	 * Add guild XP to a Discord user.
+	 * @param {String} userId ID of the Discord user.
+	 * @param {String} guildId ID of the Discord guild.
+	 * @param {String} xp XP to be added.
+	 * @returns {Object} Information about the user's guild XP.
+	 */
+	async addGuildXp(userId, guildId, xp) {
+		await this.checkEndpoint("addGuildXp");
+		await this.checkIfUserExists(userId);
+		await this.checkIfGuildExists(guildId);
+		await this.db.raw(`update UserXpStats set AwardedXp = AwardedXp + ${Math.abs(xp)} where UserId = ${userId} and GuildId = ${guildId}`);
+		return await this.getGuildXp(userId, guildId);
+	}
+
+	/**
+	 * Subtract guild XP from a Discord user.
+	 * @param {String} userId ID of the Discord user.
+	 * @param {String} guildId ID of the Discord guild.
+	 * @param {String} xp XP to be subtracted.
+	 * @returns {Object} Information about the user's guild XP.
+	 */
+	async subtractGuildXp(userId, guildId, xp) {
+		await this.checkEndpoint("subtractGuildXp");
+		await this.checkIfUserExists(userId);
+		await this.checkIfGuildExists(guildId);
+		await this.db.raw(`update UserXpStats set AwardedXp = AwardedXp - ${Math.abs(xp)} where UserId = ${userId} and GuildId = ${guildId}`);
+		return await this.getGuildXp(userId, guildId);
+	}
+
+	/**
+	 * Award guild XP to a Discord user.
+	 * @param {String} userId ID of the Discord user.
+	 * @param {String} guildId ID of the Discord guild.
+	 * @param {String} xp XP to be awarded.
+	 * @returns {Object} Information about the user's guild XP.
+	 */
+	async awardGuildXp(userId, guildId, xp) {
+		await this.checkEndpoint("awardGuildXp");
+		return xp > 0 ? await this.addGuildXp(userId, guildId, xp) : await this.subtractGuildXp(userId, guildId, xp);
+	}
+
+	/**
 	 * Get XP leaderboard of a Discord guild.
 	 * @param {String} guildId ID of the guild to get XP leaderboard of.
 	 * @param {Number} startPosition Start position/offset of the page.
@@ -489,7 +534,9 @@ class Connector {
 	/**
 	 * Get XP role rewards of a Discord guild.
 	 * @param {String} guildId ID of the guild to get XP role rewards of.
-	 * @returns {Object} Role rewards.
+	 * @param {Number} startPosition Start position/offset of the page.
+	 * @param {Number} items Items per page.
+	 * @returns {Object} Role rewards page.
 	 */
 	async getGuildXpRoleRewards(guildId, startPosition = 0, items = 10) {
 		await this.checkEndpoint("getGuildXpRoleRewards");
