@@ -120,25 +120,47 @@ class server {
 		switch (endpoint) {
 			case "getBotInfo":
 			case "getTables":
-			case "getClubs":
 				return {};
 			case "getFields":
 				return {
 					table: {
 						type: "string",
-						error: "Table must be a name of a table present in the database. Use getTables() to get a list of tables."
+						error: "table must be a name of a table present in the database. Use getTables() to get a list of tables."
 					}
 				};
 			case "execSql":
 				return {
 					command: {
 						type: "string",
-						error: "Command must be a valid SQL command string that can be executed on the database."
+						error: "command must be a valid SQL command string that can be executed on the database."
+					}
+				};
+			case "getClubInfo":
+				return {
+					name: {
+						type: "string",
+						error: "name must be the name of the club in name#discrim format as a string."
+					}
+				};
+			case "getClubMembers":
+				return {
+					name: {
+						type: "string",
+						error: "name must be the name of the club in name#discrim format as a string."
+					},
+					startPosition: {
+						type: "number",
+						error: "startPosition must be a positive non-zero integer value."
+					},
+					items: {
+						type: "number",
+						error: "items must be a positive non-zero integer value."
 					}
 				};
 			case "getCurrency":
 			case "getGlobalRank":
 			case "getGlobalXp":
+			case "getClubInfoByUser":
 				return {
 					userId: {
 						type: "string",
@@ -158,6 +180,7 @@ class server {
 				};
 			case "createTransaction":
 			case "addCurrency":
+			case "subtractCurrency":
 				return {
 					userId: {
 						type: "string",
@@ -203,7 +226,26 @@ class server {
 						error: "awardedXp must be a positive or negative integer value."
 					}
 				};
+			case "addGuildXp":
+			case "subtractGuildXp":
+			case "awardGuildXp":
+				return {
+					userId: {
+						type: "string",
+						error: "userId must be specified as a string to avoid precision loss."
+					},
+					guildId: {
+						type: "string",
+						error: "guildId must be specified as a string to avoid precision loss."
+					},
+					xp: {
+						type: "number",
+						error: "xp must be a positive or negative integer value."
+					}
+				};
 			case "getGuildXpLeaderboard":
+			case "getGuildXpRoleRewards":
+			case "getGuildXpCurrencyRewards":
 				return {
 					guildId: {
 						type: "string",
@@ -216,14 +258,6 @@ class server {
 					items: {
 						type: "number",
 						error: "items must be a positive non-zero integer value."
-					}
-				};
-			case "getGuildXpRoleRewards":
-			case "getGuildXpCurrencyRewards":
-				return {
-					guildId: {
-						type: "string",
-						error: "guildId must be specified as a string to avoid precision loss."
 					}
 				};
 			case "getTransactions":
@@ -242,6 +276,7 @@ class server {
 					}
 				};
 			case "getGlobalXpLeaderboard":
+			case "getClubLeaderboard":
 				return {
 					startPosition: {
 						type: "number",
