@@ -39,7 +39,10 @@ class Connector {
 			"getGlobalRank",
 			"getGlobalXp",
 			"getGlobalXpLeaderboard",
-			"getClubs"];
+			"getClubLeaderboard",
+			"getClubInfo",
+			"getClubInfoByUser",
+			"getClubMembers"];
 
 		if (!disabledEndpoints)
 			disabledEndpoints = [];
@@ -58,7 +61,10 @@ class Connector {
 			"getGlobalRank",
 			"getGlobalXp",
 			"getGlobalXpLeaderboard",
-			"getClubs"];
+			"getClubLeaderboard",
+			"getClubInfo",
+			"getClubInfoByUser",
+			"getClubMembers"];
 
 		if (readOnly)
 			disabledEndpoints = disabledEndpoints.concat(this._endpoints.filter((endpoint) => !readOnlyEndpoints.includes(endpoint)));
@@ -279,7 +285,7 @@ class Connector {
 		await this.checkEndpoint("getCurrency");
 		await this.checkIfUserExists(userId);
 		let info = await this.db.raw(`select cast(UserId as text) as 'userId', CurrencyAmount as 'currency' from DiscordUser where UserId = ${userId}`);
-		if (!info)
+		if (!info || (Array.isArray(info) && info.length < 1))
 			throw new Error("Unable to fetch currency.");
 		return info[0];
 	}
@@ -372,12 +378,9 @@ class Connector {
 		await this.checkEndpoint("getTransactions");
 		await this.checkIfUserExists(userId);
 		let transactions = await this.db.raw(`select Id as 'transactionId', Amount as 'amount', Reason as 'reason', DateAdded as 'dateAdded' from CurrencyTransactions where UserId = ${userId} order by Id desc limit ${items} offset ${startPosition}`);
-		if (!transactions)
+		if (!transactions || (Array.isArray(transactions) && transactions.length < 1))
 			throw new Error("User not found.");
-		return {
-			userId: userId,
-			transactions: transactions
-		};
+		return transactions;
 	}
 
 	/**
@@ -391,7 +394,7 @@ class Connector {
 		await this.checkIfUserExists(userId);
 		await this.checkIfGuildExists(guildId);
 		let guildRankings = await this.db.raw(`select cast(UserId as text) as 'id' from UserXpStats where GuildId=${guildId} order by Xp+AwardedXp desc`).map(user => user.id);
-		if (!guildRankings)
+		if (!guildRankings || (Array.isArray(guildRankings) && guildRankings.length < 1))
 			throw new Error("Unable to get guild rankings.");
 		let rank = await guildRankings.indexOf(userId);
 		if (rank < 0)
@@ -464,7 +467,9 @@ class Connector {
 		await this.checkEndpoint("getGuildXpLeaderboard");
 		await this.checkIfGuildExists(guildId);
 		let leaderboard = await this.db.raw(`select cast(UserId as text) as 'userId', Xp as 'xp', AwardedXp as 'awardedXp' from UserXpStats where GuildId=${guildId} order by (xp + awardedXp) desc limit ${items} offset ${startPosition}`);
-		leaderboard = await Promise.all(leaderboard.map(async (user, rank) => {
+		if (!leaderboard || (Array.isArray(leaderboard) && leaderboard.length < 1))
+			throw new Error("Unable to fetch guild XP leaderboard.");
+		return await Promise.all(leaderboard.map(async (user, rank) => {
 			let levelInfo = await this.calcLevel(user.xp + user.awardedXp);
 			user.level = levelInfo.level;
 			user.levelXp = levelInfo.levelXp;
@@ -472,11 +477,6 @@ class Connector {
 			user.rank = startPosition + rank + 1;
 			return user;
 		}));
-		if (!leaderboard)
-			throw new Error("Unable to fetch guild XP leaderboard.");
-		return {
-			leaderboard: leaderboard
-		};
 	}
 
 	/**
@@ -484,31 +484,29 @@ class Connector {
 	 * @param {String} guildId ID of the guild to get XP role rewards of.
 	 * @returns {Object} Role rewards.
 	 */
-	async getGuildXpRoleRewards(guildId) {
+	async getGuildXpRoleRewards(guildId, startPosition = 0, items = 10) {
 		await this.checkEndpoint("getGuildXpRoleRewards");
 		await this.checkIfGuildExists(guildId);
-		let rewards = await this.db.raw(`select a.DateAdded as 'dateAdded', a.Level as 'level', cast (a.RoleId as text) as 'roleId' from XpRoleReward a, XpSettings b, GuildConfigs c where a.XpSettingsId = b.Id AND b.GuildConfigId = c.Id AND c.GuildId = ${guildId} order by a.Level asc`);
-		if (!rewards)
+		let rewards = await this.db.raw(`select a.DateAdded as 'dateAdded', a.Level as 'level', cast (a.RoleId as text) as 'roleId' from XpRoleReward a, XpSettings b, GuildConfigs c where a.XpSettingsId = b.Id AND b.GuildConfigId = c.Id AND c.GuildId = ${guildId} order by a.Level asc limit ${items} offset ${startPosition}`);
+		if (!rewards || (Array.isArray(rewards) && rewards.length < 1))
 			throw new Error("Unable to fetch role rewards.");
-		return {
-			rewards: rewards
-		};
+		return rewards;
 	}
 
 	/**
 	 * Get XP currency rewards of a Discord guild.
 	 * @param {String} guildId ID of the guild to get XP currency rewards of.
-	 * @returns {Object} Currency rewards.
+	 * @param {Number} startPosition Start position/offset of the page.
+	 * @param {Number} items Items per page.
+	 * @returns {Object} Currency rewards page.
 	 */
 	async getGuildXpCurrencyRewards(guildId, startPosition = 0, items = 10) {
 		await this.checkEndpoint("getGuildXpCurrencyRewards");
 		await this.checkIfGuildExists(guildId);
 		let rewards = await this.db.raw(`select a.DateAdded as 'dateAdded', a.Level as 'level', a.Amount as 'amount' from XpCurrencyReward a, XpSettings b, GuildConfigs c where a.XpSettingsId = b.Id AND b.GuildConfigId = c.Id AND c.GuildId = ${guildId} order by a.Level asc limit ${items} offset ${startPosition}`);
-		if (!rewards)
+		if (!rewards || (Array.isArray(rewards) && rewards.length < 1))
 			throw new Error("Unable to fetch currency rewards.");
-		return {
-			rewards: rewards
-		};
+		return rewards;
 	}
 
 	/**
@@ -535,7 +533,7 @@ class Connector {
 		await this.checkEndpoint("getGlobalXp");
 		await this.checkIfUserExists(userId);
 		let { globalXp } = await this.db.from("UserXpStats").where({ UserId: userId }).sum({ globalXp: "Xp" })[0];
-		if (!globalXp)
+		if (!globalXp || (Array.isArray(globalXp) && globalXp.length < 1))
 			throw new Error("User not found.");
 		let levelInfo = await this.calcLevel(globalXp);
 		if (!levelInfo)
@@ -561,9 +559,9 @@ class Connector {
 	async getGlobalXpLeaderboard(startPosition = 0, items = 10) {
 		await this.checkEndpoint("getGlobalXpLeaderboard");
 		let leaderboard = await this.db.raw(`select cast(UserId as text) as 'userId', sum(Xp) as 'xp' from UserXpStats group by userId order by sum(Xp) desc limit ${items} offset ${startPosition}`);
-		if (!leaderboard)
+		if (!leaderboard || (Array.isArray(leaderboard) && leaderboard.length < 1))
 			throw new Error("Unable to fetch global XP leaderboard.");
-		leaderboard = await Promise.all(leaderboard.map(async (user, rank) => {
+		return await Promise.all(leaderboard.map(async (user, rank) => {
 			let levelInfo = await this.calcLevel(user.xp);
 			user.level = levelInfo.level;
 			user.levelXp = levelInfo.levelXp;
@@ -571,17 +569,20 @@ class Connector {
 			user.rank = startPosition + rank + 1;
 			return user;
 		}));
-		return {
-			leaderboard: leaderboard
-		};
 	}
 
-	async getClubs() {
-		await this.checkEndpoint("getClubs");
-		let clubs = await this.db.raw("select (a.Name || \"#\" || a.Discrim) as name, cast(b.UserId as text) as owner, a.Xp as xp from Clubs a, DiscordUser b WHERE a.OwnerId = b.Id order by a.Xp desc;");
-		if (!clubs)
+	/**
+	 * Get club leaderboard.
+	 * @param {Number} startPosition Start position/offset of the page.
+	 * @param {Number} items Items per page.
+	 * @returns {Object} Leaderboard page.
+	 */
+	async getClubLeaderboard(startPosition = 0, items = 10) {
+		await this.checkEndpoint("getClubLeaderboard");
+		let clubs = await this.db.raw(`select (a.Name || "#" || a.Discrim) as name, cast(b.UserId as text) as owner, a.Xp as xp, a.ImageUrl as icon, a.MinimumLevelReq as levelRequirement, a.Description as description from Clubs a, DiscordUser b WHERE a.OwnerId = b.Id order by a.Xp desc limit ${items} offset ${startPosition}`);
+		if (!clubs || (Array.isArray(clubs) && clubs.length < 1))
 			throw new Error("Unable to fetch clubs.");
-		clubs = await Promise.all(clubs.map(async (club, rank) => {
+		return await Promise.all(clubs.map(async (club, rank) => {
 			let levelInfo = await this.calcLevel(club.xp);
 			club.level = levelInfo.level;
 			club.levelXp = levelInfo.levelXp;
@@ -589,9 +590,76 @@ class Connector {
 			club.rank = rank + 1;
 			return club;
 		}));
+	}
+
+	/**
+	 * Get club information by name.
+	 * @param {Number} name Name of the club.
+	 * @returns {Object} Information about the club.
+	 */
+	async getClubInfo(name) {
+		await this.checkEndpoint("getClubInfo");
+		let clubs = await this.db.raw(`select(a.Name || "#" || a.Discrim) as clubName, cast(b.UserId as text) as owner, a.Xp as xp, a.ImageUrl as icon, a.MinimumLevelReq as levelRequirement, a.Description as description from Clubs a, DiscordUser b WHERE a.OwnerId = b.Id AND clubName = "${name}"`);
+		if (!clubs || (Array.isArray(clubs) && clubs.length < 1))
+			throw new Error("No clubs exist with the specified name.");
+		let levelInfo = await this.calcLevel(clubs[0].xp);
+		if (!levelInfo)
+			throw new Error("Unable to calculate level info.");
+		let rankings = await this.db.raw("select (Name || \"#\" || Discrim) as name from Clubs order by Xp desc").map(club => club.name);
+		if (!rankings || (Array.isArray(rankings) && rankings.length < 1))
+			throw new Error("Unable to get club ranking.");
+		let rank = rankings.indexOf(name) < 0 ? rankings.length : rankings.indexOf(name) + 1;
 		return {
-			clubs: clubs
+			name: clubs[0].clubName,
+			owner: clubs[0].owner,
+			description: clubs[0].description,
+			icon: clubs[0].icon,
+			xp: clubs[0].xp,
+			level: levelInfo.level,
+			levelXp: levelInfo.levelXp,
+			requiredXp: levelInfo.requiredXp,
+			rank: rank,
+			levelRequirement: clubs[0].levelRequirement
 		};
+	}
+
+	/**
+	 * Get club information by club member.
+	 * @param {Number} userId ID of the club member.
+	 * @returns {Object} Information about the club.
+	 */
+	async getClubInfoByUser(userId) {
+		await this.checkEndpoint("getClubInfoByUser");
+		await this.checkIfUserExists(userId);
+		let club = await this.db.raw(`select(a.Name || "#" || a.Discrim) as clubName from Clubs a, DiscordUser b WHERE b.ClubId = a.Id AND b.UserId = ${userId}`);
+		if (!club || (Array.isArray(club) && club.length < 0))
+			throw new Error("Club not found.");
+		return await this.getClubInfo(club[0].clubName);
+	}
+
+	/**
+	 * Get club members by name.
+	 * @param {Number} name Name of the club.
+	 * @param {Number} startPosition Start position/offset of the page.
+	 * @param {Number} items Items per page.
+	 * @returns {Object} Members page.
+	 */
+	async getClubMembers(name, startPosition = 0, items = 10) {
+		await this.checkEndpoint("getClubMembers");
+		let members = await this.db.raw(`select cast(a.UserId as text) as userId, a.TotalXp as xp, a.IsClubAdmin as admin from DiscordUser a, Clubs b where a.ClubId = b.Id AND (b.Name || "#" || b.Discrim)="${name}" order by xp desc limit ${items} offset ${startPosition}`);
+		if (!members || (Array.isArray(members) && members.length < 0))
+			throw new Error("No members found.");
+		return await Promise.all(members.map(async (member, rank) => {
+			let levelInfo = await this.calcLevel(member.xp);
+			return {
+				userId: member.userId,
+				admin: member.admin > 0 ? true : false,
+				xp: member.xp,
+				level: levelInfo.level,
+				levelXp: levelInfo.levelXp,
+				rank: rank + 1,
+			};
+		}));
 	}
 }
 
