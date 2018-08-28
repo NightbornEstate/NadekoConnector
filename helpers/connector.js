@@ -28,6 +28,7 @@ class Connector {
 			"getCurrency",
 			"setCurrency",
 			"addCurrency",
+			"subtractCurrency",
 			"createTransaction",
 			"getTransactions",
 			"getGuildRank",
@@ -309,37 +310,43 @@ class Connector {
 	}
 
 	/**
-	 * Update the bot's currency and transactions.
-	 * @param {String} reason Reason for the transaction.
-	 * @param {Number} currency Currency amount to be set.
-	 */
-	async updateBotCurrency(currency, reason) {
-		let { bot } = await this.getBotInfo();
-		if (!bot)
-			throw new Error("Unable to fetch bot information.");
-		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount ${currency > -1 ? "-" : "+"} ${Math.abs(currency)} where UserId = ${bot.id}`);
-		let botTransactionCreated = await this.createTransaction(bot.id, -1 * currency, reason);
-		if (!botTransactionCreated)
-			throw new Error("Unable to create a currency transaction for the bot.");
-	}
-
-	/**
 	 * Add currency to a user.
 	 * @param {String} userId ID of the Discord user.
-	 * @param {Number} currency Currency amount to be set.
+	 * @param {Number} currency Currency amount to be added.
 	 * @param {String} reason Reason for the transaction.
 	 * @returns {Object} Balance info about the specified user.
 	 */
 	async addCurrency(userId, currency, reason) {
 		await this.checkEndpoint("addCurrency");
 		await this.checkIfUserExists(userId);
-		let oldCurrency = await this.getCurrency(userId).currency;
-		currency = currency > -1 ? currency : -1 * Math.min(Math.abs(currency), Math.abs(oldCurrency));
-		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount ${currency > -1 ? "+" : "-"} ${Math.abs(currency)} where UserId = ${userId}`);
+		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount + ${Math.abs(currency)} where UserId = ${userId}`);
 		let userTransactionCreated = await this.createTransaction(userId, currency, reason);
 		if (!userTransactionCreated)
 			throw new Error("Unable to create a currency transaction for the user.");
-		await this.updateBotCurrency(currency, reason);
+		if (userId !== this.credentials.ClientId)
+			await this.subtractCurrency(this.credentials.ClientId, currency, reason);
+		return await this.getCurrency(userId);
+	}
+
+	/**
+	 * Subtract currency from a user.
+	 * @param {String} userId ID of the Discord user.
+	 * @param {Number} currency Currency amount to be subtracted.
+	 * @param {String} reason Reason for the transaction.
+	 * @returns {Object} Balance info about the specified user.
+	 */
+	async subtractCurrency(userId, currency, reason) {
+		await this.checkEndpoint("subtractCurrency");
+		await this.checkIfUserExists(userId);
+		let { currency: oldCurrency } = await this.getCurrency(userId);
+		if (currency > oldCurrency && userId !== this.credentials.ClientId)
+			throw new Error("User does not have the specified currency.");
+		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount - ${Math.abs(currency)} where UserId = ${userId}`);
+		let userTransactionCreated = await this.createTransaction(userId, currency, reason);
+		if (!userTransactionCreated)
+			throw new Error("Unable to create a currency transaction for the user.");
+		if (userId !== this.credentials.ClientId)
+			await this.addCurrency(this.credentials.ClientId, currency, reason);
 		return await this.getCurrency(userId);
 	}
 
