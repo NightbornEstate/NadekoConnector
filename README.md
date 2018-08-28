@@ -2,11 +2,13 @@
 <p align=center><b>Exposes parts of the NadekoBot database for modification through JSONWebTokens. </b></p>
 
 ## Setup
-- Run `npm i` to install all required dependencies. 
-- Set the bot configuration (databasePath, credentialsPath, port and password) in `config.json`
-- Run `node main.js`. 
+
+- Run `npm i` to install all required dependencies.
+- Set the bot configurations (databasePath, credentialsPath, port and password) in `config.json`
+- Run `node main.js`.
 
 ## Endpoints
+
 - getBotInfo
 - getTables
 - getFields
@@ -14,15 +16,22 @@
 - getCurrency
 - setCurrency
 - addCurrency
+- subtractCurrency
 - createTransaction
 - getTransactions
+- getGuildRank
 - getGuildXp
 - setGuildXp
-- getGuildRank
+- addGuildXp
+- subtractGuildXp
+- awardGuildXp
 - getGuildXpLeaderboard
 - getGuildXpRoleRewards
 - getGuildXpCurrencyRewards
-- getGlobalXp
 - getGlobalRank
+- getGlobalXp
 - getGlobalXpLeaderboard
-- getClubs
+- getClubLeaderboard
+- getClubInfo
+- getClubInfoByUser
+- getClubMembers
