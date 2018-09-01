@@ -345,7 +345,7 @@ class Connector {
 		if (currency > oldCurrency && userId !== this.credentials.ClientId)
 			throw new Error("User does not have the specified currency.");
 		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount - ${Math.abs(currency)} where UserId = ${userId}`);
-		let userTransactionCreated = await this.createTransaction(userId, currency, reason);
+		let userTransactionCreated = await this.createTransaction(userId, -1 * Math.abs(currency), reason);
 		if (!userTransactionCreated)
 			throw new Error("Unable to create a currency transaction for the user.");
 		if (userId !== this.credentials.ClientId)
