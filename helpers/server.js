@@ -21,15 +21,11 @@ class server {
 			credentialsPath: "string"
 		};
 
-		if (!Object.keys(requiredSettingsModel).every(property => Object.keys(settings).includes(property)))
-			throw new Error("Invalid settings specified.");
-
-		let context = this;
-		Object.keys(requiredSettingsModel).map(property => {
-			if (typeof settings[property] !== requiredSettingsModel[property])
-				throw new Error(`${property} must be a ${requiredSettingsModel[property]}`);
-			context[property] = settings[property];
-		});
+		for (let [property, type] of Object.entries(requiredSettingsModel)) {
+			if (typeof settings[property] !== type)
+				throw new typeError(property, settings[property], type);
+			this[property] = settings[property];
+		}
 
 		if (!Array.isArray(settings.disabledEndpoints))
 			settings.disabledEndpoints = [];

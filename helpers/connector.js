@@ -281,6 +281,17 @@ class Connector {
 	}
 
 	/**
+	 * Check if currency amount is properly specified.
+	 * @param {String} currency Currency amount.
+	 */
+	async checkIfValidCurrency(currency) {
+		if (typeof currency !== "number")
+			throw new Error("Currency amount must be a number.");
+		if (currency >= Number.MAX_SAFE_INTEGER || currency <= Number.MIN_SAFE_INTEGER)
+			throw new Error("Currency amount exceeds maximum safe integer limits.");
+	}
+
+	/**
 	 * Get the currency of a Discord user.
 	 * @param {String} userId ID of the Discord user.
 	 * @returns {Object} Balance info about the specified user.
@@ -303,6 +314,7 @@ class Connector {
 	async setCurrency(userId, currency) {
 		await this.checkEndpoint("setCurrency");
 		await this.checkIfUserExists(userId);
+		await this.checkIfValidCurrency(currency);
 		let updatedRows = await this.db.from("DiscordUser").update({ CurrencyAmount: currency }).where({ UserId: userId });
 		if (updatedRows < 1)
 			throw new Error("Unable to update currency.");
@@ -322,8 +334,9 @@ class Connector {
 	async addCurrency(userId, currency, reason) {
 		await this.checkEndpoint("addCurrency");
 		await this.checkIfUserExists(userId);
+		await this.checkIfValidCurrency(currency);
 		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount + ${Math.abs(currency)} where UserId = ${userId}`);
-		let userTransactionCreated = await this.createTransaction(userId, currency, reason);
+		let userTransactionCreated = await this.createTransaction(userId, Math.abs(currency), reason);
 		if (!userTransactionCreated)
 			throw new Error("Unable to create a currency transaction for the user.");
 		if (userId !== this.credentials.ClientId)
@@ -341,6 +354,7 @@ class Connector {
 	async subtractCurrency(userId, currency, reason) {
 		await this.checkEndpoint("subtractCurrency");
 		await this.checkIfUserExists(userId);
+		await this.checkIfValidCurrency(currency);
 		let { currency: oldCurrency } = await this.getCurrency(userId);
 		if (currency > oldCurrency && userId !== this.credentials.ClientId)
 			throw new Error("User does not have the specified currency.");
@@ -362,6 +376,7 @@ class Connector {
 	 */
 	async createTransaction(userId, currency, reason) {
 		await this.checkEndpoint("createTransaction");
+		await this.checkIfValidCurrency(currency);
 		let dateAdded = new Date().toISOString().replace(/[TZ]/g, " ");
 		let row = await this.db.from("CurrencyTransactions").insert({
 			UserId: userId,
