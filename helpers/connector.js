@@ -571,7 +571,7 @@ class Connector {
 	async getGlobalRank(userId) {
 		await this.checkEndpoint("getGlobalRank");
 		await this.checkIfUserExists(userId);
-		let globalRankings = await this.db.raw("select cast(UserId as text) as 'id' from UserXpStats group by UserId order by sum(Xp) desc").map(user => user.id);
+		let globalRankings = await this.db.raw("select cast(UserId as text) as 'id' from DiscordUser order by TotalXp desc").map(user => user.id);
 		let rank = await globalRankings.indexOf(userId);
 		if (rank < 0)
 			rank = globalRankings.length;
@@ -586,7 +586,7 @@ class Connector {
 	async getGlobalXp(userId) {
 		await this.checkEndpoint("getGlobalXp");
 		await this.checkIfUserExists(userId);
-		let { globalXp } = await this.db.from("UserXpStats").where({ UserId: userId }).sum({ globalXp: "Xp" })[0];
+		let [{ globalXp }] = await this.db.raw(`select TotalXp as 'globalXp' from DiscordUser where UserId=${userId}`);
 		if (!globalXp || (Array.isArray(globalXp) && globalXp.length < 1))
 			throw new Error("User not found.");
 		let levelInfo = await this.calcLevel(globalXp);
@@ -612,11 +612,11 @@ class Connector {
 	 */
 	async getGlobalXpLeaderboard(startPosition = 0, items = 10) {
 		await this.checkEndpoint("getGlobalXpLeaderboard");
-		let leaderboard = await this.db.raw(`select cast(UserId as text) as 'userId', sum(Xp) as 'xp' from UserXpStats group by userId order by sum(Xp) desc limit ${items} offset ${startPosition}`);
+		let leaderboard = await this.db.raw(`select cast(UserId as text) as 'userId', TotalXp as 'globalXp' from DiscordUser order by TotalXp desc limit ${items} offset ${startPosition}`);
 		if (!leaderboard || (Array.isArray(leaderboard) && leaderboard.length < 1))
 			throw new Error("Unable to fetch global XP leaderboard.");
 		return await Promise.all(leaderboard.map(async (user, rank) => {
-			let levelInfo = await this.calcLevel(user.xp);
+			let levelInfo = await this.calcLevel(user.globalXp);
 			user.level = levelInfo.level;
 			user.levelXp = levelInfo.levelXp;
 			user.requiredXp = levelInfo.requiredXp;
