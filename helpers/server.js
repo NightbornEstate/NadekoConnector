@@ -1,12 +1,12 @@
-var express = require("express");
-var helmet = require("helmet");
-var morgan = require("morgan");
+const express = require("express");
+const helmet = require("helmet");
+const morgan = require("morgan");
 
-var isPortAvailable = require("is-port-available");
-var jwt = require("jsonwebtoken");
+const isPortAvailable = require("is-port-available");
+const jwt = require("jsonwebtoken");
 
-var Connector = require("./connector.js");
-var fileManager = require("./fileManager.js");
+const Connector = require("./connector.js");
+const fileManager = require("./fileManager.js");
 
 
 class server {
@@ -14,16 +14,16 @@ class server {
 		if (!settings || typeof settings !== "object")
 			throw new Error("Invalid settings specified.");
 
-		let requiredSettingsModel = {
+		const requiredSettingsModel = {
 			port: "number",
 			password: "string",
 			databasePath: "string",
 			credentialsPath: "string"
 		};
 
-		for (let [property, type] of Object.entries(requiredSettingsModel)) {
+		for (const [property, type] of Object.entries(requiredSettingsModel)) {
 			if (typeof settings[property] !== type)
-				throw new typeError(property, settings[property], type);
+				throw new Error(`Invalid type specified for ${property}. Expected:${type} Found: ${typeof settings[property]}`);
 			this[property] = settings[property];
 		}
 
@@ -60,7 +60,7 @@ class server {
 		this.app.use(helmet());
 		this.app.use(morgan("dev"));
 
-		this.connector.endpoints.map(async endpoint => await this.registerEndpoint(endpoint));
+		this.connector.endpoints.map(this.registerEndpoint);
 
 		this.app.listen(this._port);
 	}
@@ -78,13 +78,12 @@ class server {
 			throw new Error("Server not initialized.");
 		if (typeof endpoint !== "string")
 			throw new Error("Invalid endpoint specified.");
-		let context = this;
-		this.app.get(`/${endpoint.toLowerCase()}/:token`, async function (request, response) {
+		this.app.get(`/${endpoint.toLowerCase()}/:token`, async (request, response) => {
 			let result = {};
 			try {
-				let query = await context.parseToken(request.params.token);
-				let properties = await context.checkProperties(query, endpoint);
-				result = await context.handleEndpoint(endpoint, query, properties);
+				const query = await this.parseToken(request.params.token);
+				const properties = await this.checkProperties(query, endpoint);
+				result = await this.handleEndpoint(endpoint, query, properties);
 			}
 			catch (error) {
 				result = { error: error.name, message: error.message };
@@ -96,15 +95,15 @@ class server {
 	}
 
 	async parseToken(token) {
-		let query = await jwt.verify(token, this.password);
+		const query = await jwt.verify(token, this.password);
 		if (!query || typeof query !== "object")
 			throw new Error("Invalid token.");
 		return query;
 	}
 
 	async checkProperties(query, endpoint) {
-		let keys = Object.keys(query).sort();
-		let requiredProperties = await this.getRequiredProperties(endpoint);
+		const keys = Object.keys(query).sort();
+		const requiredProperties = await this.getRequiredProperties(endpoint);
 		Object.keys(requiredProperties).map(property => {
 			if (!(keys.includes(property) && typeof query[property] === requiredProperties[property].type))
 				throw new Error(`Invalid properties specified. \n${requiredProperties[property].error}`);
@@ -289,9 +288,9 @@ class server {
 	}
 
 	async handleEndpoint(endpoint, query, properties) {
-		let args = [];
+		const args = [];
 		properties.map(property => args.push(query[property]));
-		return await this.connector[endpoint](...args);
+		return this.connector[endpoint](...args);
 	}
 }
 
