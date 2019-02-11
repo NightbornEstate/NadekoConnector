@@ -1,7 +1,5 @@
-const jsonbs = require("json-bigint")({ storeAsString: true });
-const knex = require("knex");
-const fs = require("fs");
-const path = require("path");
+const File = require("./file.js");
+const Database = require("better-sqlite3");
 
 class Connector {
 
@@ -13,12 +11,8 @@ class Connector {
 	 * @param {Boolean} readOnly Whether the connector should be read-only.
 	 */
 	constructor(databasePath, credentialsPath, disabledEndpoints, readOnly) {
-		this.db = new knex({
-			client: "sqlite3",
-			connection: { filename: databasePath },
-			useNullAsDefault: true
-		});
-		this.credentials = jsonbs.parse(fs.readFileSync(path.resolve(credentialsPath)).toString());
+		this.db = new Database(databasePath, { memory: false, readonly: Boolean(readOnly), fileMustExist: true });
+		this.credentials = new File(credentialsPath, err => { throw err; }).read();
 
 		this._endpoints = [
 			"getBotInfo",
@@ -49,28 +43,7 @@ class Connector {
 			"getClubMembers"
 		];
 
-		const readOnlyEndpoints = [
-			"getBotInfo",
-			"getTables",
-			"getFields",
-			"getCurrency",
-			"getTransactions",
-			"getGuildRank",
-			"getGuildXp",
-			"getGuildXpLeaderboard",
-			"getGuildXpRoleRewards",
-			"getGuildXpCurrencyRewards",
-			"getGlobalRank",
-			"getGlobalXp",
-			"getGlobalXpLeaderboard",
-			"getClubLeaderboard",
-			"getClubInfo",
-			"getClubInfoByUser",
-			"getClubMembers"
-		];
-
-		if (readOnly)
-			disabledEndpoints = disabledEndpoints.concat(this._endpoints.filter(endpoint => !readOnlyEndpoints.includes(endpoint)));
+		if (readOnly) disabledEndpoints = disabledEndpoints.concat(this._endpoints.filter(endpoint => !endpoint.startsWith("get")));
 		this._disabledEndpoints = [...new Set(disabledEndpoints)];
 		this._init = false;
 	}
@@ -119,13 +92,13 @@ class Connector {
 	 * @param {Number} xp XP to calculate level for.
 	 * @returns {Object} Level information.
 	 */
-	async calcLevel(xp) {
+	calcLevel(xp) {
 		if (typeof xp !== "number" || xp < 0)
 			throw new Error("XP must be a valid numerical value.");
-		let level = 1,
+		let level = 0,
 			required = 0;
 		while (true) {
-			required = 36 + (9 * (level - 1));
+			required = 36 + (9 * level);
 			if (xp >= required) {
 				xp -= required;
 				level++;
@@ -133,26 +106,22 @@ class Connector {
 			if (xp < required)
 				break;
 		}
-		return {
-			level: level - 1,
-			levelXp: xp,
-			requiredXp: required + 9
-		};
+		return { level, levelXp: xp, requiredXp: required + 9 };
 	}
 
 	/**
 	 * Check if the connector has been initialized or not.
 	 */
-	async checkInitialized() {
+	checkInitialized() {
 		if (!this._init)
-			throw new Error("Connector not initialized. This may lead to unexpected errors.");
+			throw new Error("Connector not initialized. Please initialize it by calling initialize().");
 	}
 
 	/**
 	 * Check if the endpoint has been disabled.
 	 */
-	async checkEndpoint(endpoint) {
-		await this.checkInitialized();
+	checkEndpoint(endpoint) {
+		this.checkInitialized();
 		if (this._disabledEndpoints.map(endpoint => endpoint.toLowerCase()).includes(endpoint.toLowerCase()))
 			throw new Error("Endpoint disabled.");
 	}
@@ -160,37 +129,36 @@ class Connector {
 	/**
 	 * Initialize the connector.
 	 */
-	async initialize() {
+	initialize() {
+		try {
+			const statements = ["journal_mode=OFF", "locking_mode=NORMAL", "synchronous=OFF", "optimize"];
+			statements.forEach(statement => this.db.pragma(statement));
+		}
+		catch (error) {
+			throw new Error("Database could not be initialized.");
+		}
 		this._init = true;
-		await this.db.raw("PRAGMA journal_mode=OFF");
-		await this.db.raw("PRAGMA locking_mode=NORMAL");
-		await this.db.raw("PRAGMA synchronous=OFF");
-		await this.db.raw("PRAGMA optimize");
 	}
 
 	/**
 	 * Gets info about the bot.
 	 * @returns {Object} Info about the bot.
 	 */
-	async getBotInfo() {
-		await this.checkEndpoint("getBotInfo");
-		const dbInfo = await this.db.first("CurrencySign", "CurrencyName", "CurrencyPluralName", "XpPerMessage", "XpMinutesTimeout").from("BotConfig");
-		if (!dbInfo)
-			throw new Error("Unable to fetch bot configuration.");
-		if (!this.credentials)
-			throw new Error("Unable to fetch bot credentials.");
+	getBotInfo() {
+		this.checkEndpoint("getBotInfo");
+		const bet = this.db.prepare("select MinBet as 'minimum', MaxBet as 'maximum' from BotConfig").get();
+		const currency = this.db.prepare("select CurrencySign as 'sign', CurrencyName as 'name', CurrencyPluralName as 'pluralname' from BotConfig").get();
+		const generation = this.db.prepare("select CurrencyGenerationChance as 'chance', CurrencyGenerationCooldown as 'cooldown', CurrencyDropAmount as 'minimumDrop', CurrencyDropAmountMax as 'maximumDrop' from BotConfig").get();
+		const timely = this.db.prepare("select TimelyCurrency as 'amount', TimelyCurrencyPeriod as 'timeout' from BotConfig").get();
+		const xp = this.db.prepare("select XpPerMessage as 'perMessage', XpMinutesTimeout as 'timeout' from BotConfig").get();
 		return {
 			id: this.credentials.ClientId,
 			owners: this.credentials.OwnerIds,
 			currency: {
-				sign: dbInfo.CurrencySign,
-				name: dbInfo.CurrencyName,
-				pluralName: dbInfo.CurrencyPluralName
+				...currency,
+				bet, generation, timely
 			},
-			xp: {
-				perMessage: dbInfo.XpPerMessage,
-				interval: dbInfo.XpMinutesTimeout
-			}
+			xp
 		};
 	}
 
@@ -198,12 +166,10 @@ class Connector {
 	 * Gets the tables present in the database.
 	 * @returns {Object} Array of table names.
 	 */
-	async getTables() {
-		await this.checkEndpoint("getTables");
-		let tables = await this.db.raw("select name from sqlite_master where type='table'");
-		tables = tables.map(table => table.name);
-		if (!tables)
-			throw new Error("Unable to list tables.");
+	getTables() {
+		this.checkEndpoint("getTables");
+		const tables = this.db.prepare("select name from sqlite_master where type='table'").all().map(table => table.name).sort();
+		if (!tables) throw new Error("Unable to list tables.");
 		this.tables = tables;
 		return { tables };
 	}
@@ -213,63 +179,50 @@ class Connector {
 	 * @param {String} table Name of the table.
 	 * @returns {Object} Array of field names.
 	 */
-	async getFields(table) {
-		await this.checkEndpoint("getFields");
-		if (!this.tables)
-			this.tables = await this.getTables({}).tables;
-		if (!this.tables.includes(table))
-			throw new Error("Table not present.");
-		const fields = await this.db.from(table).columnInfo();
-		if (!fields)
-			throw new Error("Unable to get fields.");
+	getFields(table) {
+		this.checkEndpoint("getFields");
+		if (!this.tables) this.tables = this.getTables().tables;
+		if (!this.tables.includes(table)) throw new Error("Table not present.");
+		const fields = this.db.prepare(`select * from ${table}`).get();
 		return { fields: Object.keys(fields) };
 	}
 
 	/**
-	 * Execute a raw SQL query and return the rows.
+	 * Execute an SQL query and return the rows.
 	 * @param {String} command The SQL command to execute.
 	 * @returns {Object} Result of the command, array of rows if multiple rows were affected or a single JSON object if a single row was affected.
 	 */
-	async execSql(command) {
-		await this.checkEndpoint("execSql");
-		const result = await this.db.raw(command);
-		const rowsAffected = result.length;
-		if (!result)
-			throw new Error("No rows were affected.");
-		if (Array.isArray(result) && rowsAffected === 1)
-			return { result: result[0] };
-		return { result, rowsAffected };
+	execSql(command) {
+		this.checkEndpoint("execSql");
+		const rows = this.db.prepare(command).all();
+		return { rows, affected: rows.length };
 	}
 
 	/**
 	 * Check if a Discord guild exists in the database.
 	 * @param {String} guildId ID of the Discord guild.
 	 */
-	async checkIfGuildExists(guildId) {
-		if (typeof guildId !== "string")
-			throw new Error("IDs must be provided as strings to avoid loss of precision.");
-		const guilds = await this.db.raw("select cast(GuildId as text) as 'guildId' from GuildConfigs").map(element => element.guildId);
-		if (!guilds.includes(guildId))
-			throw new Error("Guild not found.");
+	checkIfGuildExists(guildId) {
+		if (typeof guildId !== "string") throw new Error("Guild IDs must be provided as strings.");
+		const guild = this.db.prepare(`select Id from GuildConfigs where GuildId=${guildId}`).get();
+		if (!guild) throw new Error("Guild not found.");
 	}
 
 	/**
 	 * Check if a Discord user exists in the database.
 	 * @param {String} userId ID of the Discord user.
 	 */
-	async checkIfUserExists(userId) {
-		if (typeof userId !== "string")
-			throw new Error("IDs must be provided as strings to avoid loss of precision.");
-		const users = await this.db.raw("select cast(UserId as text) as 'userId' from DiscordUser").map(element => element.userId);
-		if (!users.includes(userId))
-			throw new Error("User not found.");
+	checkIfUserExists(userId) {
+		if (typeof userId !== "string") throw new Error("User IDs must be provided as strings.");
+		const user = this.db.prepare(`select Id from DiscordUser where UserId=${userId}`).get();
+		if (!user) throw new Error("User not found.");
 	}
 
 	/**
 	 * Check if currency amount is properly specified.
 	 * @param {String} currency Currency amount.
 	 */
-	async checkIfValidCurrency(currency) {
+	checkIfValidCurrency(currency) {
 		if (typeof currency !== "number")
 			throw new Error("Currency amount must be a number.");
 		if (currency >= Number.MAX_SAFE_INTEGER || currency <= Number.MIN_SAFE_INTEGER)
@@ -281,12 +234,11 @@ class Connector {
 	 * @param {String} userId ID of the Discord user.
 	 * @returns {Object} Balance info about the specified user.
 	 */
-	async getCurrency(userId) {
-		await this.checkEndpoint("getCurrency");
-		await this.checkIfUserExists(userId);
-		const [info] = await this.db.raw(`select cast(UserId as text) as 'userId', CurrencyAmount as 'currency' from DiscordUser where UserId = ${userId}`);
-		if (!info)
-			throw new Error("Unable to fetch currency.");
+	getCurrency(userId) {
+		this.checkEndpoint("getCurrency");
+		this.checkIfUserExists(userId);
+		const info = this.db.prepare(`select cast(UserId as text) as 'userId', CurrencyAmount as 'currency' from DiscordUser where UserId = ${userId}`).get();
+		if (!info) throw new Error("Unable to fetch currency.");
 		return info;
 	}
 
@@ -296,13 +248,12 @@ class Connector {
 	 * @param {Number} currency Currency amount to be set.
 	 * @returns {Object} Balance info about the specified user.
 	 */
-	async setCurrency(userId, currency) {
-		await this.checkEndpoint("setCurrency");
-		await this.checkIfUserExists(userId);
-		await this.checkIfValidCurrency(currency);
-		const updatedRows = await this.db.from("DiscordUser").update({ CurrencyAmount: currency }).where({ UserId: userId });
-		if (updatedRows < 1)
-			throw new Error("Unable to update currency.");
+	setCurrency(userId, currency) {
+		this.checkEndpoint("setCurrency");
+		this.checkIfUserExists(userId);
+		this.checkIfValidCurrency(currency);
+		const { changes } = this.db.prepare(`update DiscordUser set CurrencyAmount = ${currency} where UserId=${userId}`).run();
+		if (!changes) throw new Error("Unable to update currency.");
 		return { userId, currency };
 	}
 
@@ -313,16 +264,16 @@ class Connector {
 	 * @param {String} reason Reason for the transaction.
 	 * @returns {Object} Balance info about the specified user.
 	 */
-	async addCurrency(userId, currency, reason) {
-		await this.checkEndpoint("addCurrency");
-		await this.checkIfUserExists(userId);
-		await this.checkIfValidCurrency(currency);
-		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount + ${Math.abs(currency)} where UserId = ${userId}`);
-		const userTransactionCreated = await this.createTransaction(userId, Math.abs(currency), reason);
-		if (!userTransactionCreated)
-			throw new Error("Unable to create a currency transaction for the user.");
+	addCurrency(userId, currency, reason) {
+		this.checkEndpoint("addCurrency");
+		this.checkIfUserExists(userId);
+		this.checkIfValidCurrency(currency);
+		const userCurrency = this.db.prepare(`update DiscordUser set CurrencyAmount = CurrencyAmount + ${Math.abs(currency)} where UserId = ${userId}`).run();
+		if (!userCurrency.changes) throw new Error("Unable to add currency to this user.");
+		const createdTransaction = this.createTransaction(userId, Math.abs(currency), reason);
+		if (!createdTransaction) throw new Error("Unable to create a currency transaction for the user.");
 		if (userId !== this.credentials.ClientId)
-			await this.subtractCurrency(this.credentials.ClientId, currency, reason);
+			this.subtractCurrency(this.credentials.ClientId, currency, reason);
 		return this.getCurrency(userId);
 	}
 
@@ -333,19 +284,19 @@ class Connector {
 	 * @param {String} reason Reason for the transaction.
 	 * @returns {Object} Balance info about the specified user.
 	 */
-	async subtractCurrency(userId, currency, reason) {
-		await this.checkEndpoint("subtractCurrency");
-		await this.checkIfUserExists(userId);
-		await this.checkIfValidCurrency(currency);
-		const { currency: oldCurrency } = await this.getCurrency(userId);
+	subtractCurrency(userId, currency, reason) {
+		this.checkEndpoint("subtractCurrency");
+		this.checkIfUserExists(userId);
+		this.checkIfValidCurrency(currency);
+		const { currency: oldCurrency } = this.getCurrency(userId);
 		if (Math.abs(currency) > oldCurrency && userId !== this.credentials.ClientId)
 			throw new Error("User does not have the specified currency.");
-		await this.db.raw(`update DiscordUser set CurrencyAmount =  CurrencyAmount - ${Math.abs(currency)} where UserId = ${userId}`);
-		const userTransactionCreated = await this.createTransaction(userId, -1 * Math.abs(currency), reason);
-		if (!userTransactionCreated)
-			throw new Error("Unable to create a currency transaction for the user.");
+		const userCurrency = this.db.prepare(`update DiscordUser set CurrencyAmount =  CurrencyAmount - ${Math.abs(currency)} where UserId = ${userId}`).run();
+		if (!userCurrency.changes) throw new Error("Unable to subtract currency from this user.");
+		const createdTransaction = this.createTransaction(userId, -1 * Math.abs(currency), reason);
+		if (!createdTransaction) throw new Error("Unable to create a currency transaction for the user.");
 		if (userId !== this.credentials.ClientId)
-			await this.addCurrency(this.credentials.ClientId, currency, reason);
+			this.addCurrency(this.credentials.ClientId, currency, reason);
 		return this.getCurrency(userId);
 	}
 
@@ -356,21 +307,13 @@ class Connector {
 	 * @param {String} reason Reason for the transaction.
 	 * @returns {Object} Transaction info.
 	 */
-	async createTransaction(userId, currency, reason) {
-		await this.checkEndpoint("createTransaction");
-		await this.checkIfValidCurrency(currency);
+	createTransaction(userId, currency, reason) {
+		this.checkEndpoint("createTransaction");
+		this.checkIfValidCurrency(currency);
 		const dateAdded = new Date().toISOString().replace(/[TZ]/g, " ");
-		const row = await this.db.from("CurrencyTransactions").insert({
-			UserId: userId,
-			Amount: currency,
-			Reason: reason,
-			DateAdded: dateAdded
-		});
-		if (!row)
-			throw new Error("Unable to create a transaction.");
-		return {
-			userId, transactionId: row[0]
-		};
+		const createdTransaction = this.db.prepare(`insert into CurrencyTransactions (UserId, Amount, Reason, DateAdded) values (${[userId, currency, reason, dateAdded].join(",")})`).run();
+		if (!createdTransaction) throw new Error("Unable to create a transaction.");
+		return { userId, transactionId: createdTransaction.lastInsertRowid };
 	}
 
 	/**
@@ -380,12 +323,11 @@ class Connector {
 	 * @param {Number} items Items per page.
 	 * @returns {Object} Transactions.
 	 */
-	async getTransactions(userId, startPosition = 0, items = 10) {
-		await this.checkEndpoint("getTransactions");
-		await this.checkIfUserExists(userId);
-		const transactions = await this.db.raw(`select Id as 'transactionId', Amount as 'amount', Reason as 'reason', DateAdded as 'dateAdded' from CurrencyTransactions where UserId = ${userId} order by Id desc limit ${items} offset ${startPosition}`);
-		if (!transactions || (Array.isArray(transactions) && transactions.length < 1))
-			throw new Error("User not found.");
+	getTransactions(userId, startPosition = 0, items = 10) {
+		this.checkEndpoint("getTransactions");
+		this.checkIfUserExists(userId);
+		const transactions = this.db.prepare(`select Id as 'transactionId', Amount as 'amount', Reason as 'reason', DateAdded as 'dateAdded' from CurrencyTransactions where UserId = ${userId} order by Id desc limit ${items} offset ${startPosition}`).all();
+		if (!transactions.length) throw new Error("No transactions found for this user.");
 		return transactions;
 	}
 
@@ -395,17 +337,14 @@ class Connector {
 	 * @param {String} guildId ID of the Discord guild.
 	 * @returns {Object} Rank info.
 	 */
-	async getGuildRank(userId, guildId) {
-		await this.checkEndpoint("getGuildRank");
-		await this.checkIfUserExists(userId);
-		await this.checkIfGuildExists(guildId);
-		const guildRankings = await this.db.raw(`select cast(UserId as text) as 'id' from UserXpStats where GuildId=${guildId} order by Xp+AwardedXp desc`).map(user => user.id);
-		if (!guildRankings || (Array.isArray(guildRankings) && guildRankings.length < 1))
-			throw new Error("Unable to get guild rankings.");
-		let rank = await guildRankings.indexOf(userId);
-		if (rank < 0)
-			rank = guildRankings.length;
-		return { userId, rank: ++rank };
+	getGuildRank(userId, guildId) {
+		this.checkEndpoint("getGuildRank");
+		this.checkIfUserExists(userId);
+		this.checkIfGuildExists(guildId);
+		const guildRankings = this.db.prepare(`select cast(UserId as text) as 'id' from UserXpStats where GuildId=${guildId} order by Xp+AwardedXp desc`).all().map(user => user.id);
+		if (!guildRankings.length) throw new Error("Unable to get guild rankings.");
+		const rank = guildRankings.indexOf(userId) > -1 ? guildRankings.indexOf(userId) + 1 : guildRankings.length;
+		return { userId, rank };
 	}
 
 	/**
@@ -414,22 +353,16 @@ class Connector {
 	 * @param {String} guildId ID of the Discord guild.
 	 * @returns {Object} Information about the user's XP.
 	 */
-	async getGuildXp(userId, guildId) {
-		await this.checkEndpoint("getGuildXp");
-		await this.checkIfUserExists(userId);
-		await this.checkIfGuildExists(guildId);
-		const xpInfo = await this.db.first("Xp", "AwardedXp").from("UserXpStats").where({
-			UserId: userId,
-			GuildId: guildId
-		});
-		if (!xpInfo)
-			throw new Error("Unable to find the user/guild.");
-		const rankInfo = await this.getGuildRank(userId, guildId);
-		if (!rankInfo)
-			throw new Error("Unable to get rank.");
-		const levelInfo = await this.calcLevel(xpInfo.Xp + xpInfo.AwardedXp);
-		if (!levelInfo)
-			throw new Error("Unable to calculate level.");
+	getGuildXp(userId, guildId) {
+		this.checkEndpoint("getGuildXp");
+		this.checkIfUserExists(userId);
+		this.checkIfGuildExists(guildId);
+		const xpInfo = this.db.prepare(`select Xp, AwardedXp from UserXpStats where UserId = ${userId} and GuildId = ${guildId}`).get();
+		if (!xpInfo) throw new Error("Unable to get XP info of the given user for this guild.");
+		const rankInfo = this.getGuildRank(userId, guildId);
+		if (!rankInfo) throw new Error("Unable to get rank.");
+		const levelInfo = this.calcLevel(xpInfo.Xp + xpInfo.AwardedXp);
+		if (!levelInfo) throw new Error("Unable to calculate level.");
 		return {
 			guildXp: xpInfo.Xp,
 			awardedXp: xpInfo.AwardedXp,
@@ -447,16 +380,14 @@ class Connector {
 	 * @param {String} awardedXp XP awarded to the Discord user.
 	 * @returns {Object} Information about the user's guild XP.
 	 */
-	async setGuildXp(userId, guildId, xp, awardedXp) {
-		await this.checkEndpoint("setGuildXp");
-		await this.checkIfUserExists(userId);
-		await this.checkIfGuildExists(guildId);
-		const updatedRows = await this.db.from("UserXpStats").update({ Xp: xp, AwardedXp: awardedXp }).where({ UserId: userId, GuildId: guildId });
-		if (updatedRows < 1)
-			throw new Error("Unable to update guild XP.");
-		const xpInfo = await this.getGuildXp(userId, guildId);
-		if (!xpInfo)
-			throw new Error("Unable to fetch XP info.");
+	setGuildXp(userId, guildId, xp, awardedXp) {
+		this.checkEndpoint("setGuildXp");
+		this.checkIfUserExists(userId);
+		this.checkIfGuildExists(guildId);
+		const guildXp = this.db.prepare(`update UserXpStats set Xp=${xp}, AwardedXp=${awardedXp} where UserId=${userId} and GuildId=${guildId}`).run();
+		if (!guildXp.changes) throw new Error("Unable to update guild XP.");
+		const xpInfo = this.getGuildXp(userId, guildId);
+		if (!xpInfo) throw new Error("Unable to fetch XP info.");
 		return xpInfo;
 	}
 
@@ -467,11 +398,12 @@ class Connector {
 	 * @param {String} xp XP to be added.
 	 * @returns {Object} Information about the user's guild XP.
 	 */
-	async addGuildXp(userId, guildId, xp) {
-		await this.checkEndpoint("addGuildXp");
-		await this.checkIfUserExists(userId);
-		await this.checkIfGuildExists(guildId);
-		await this.db.raw(`update UserXpStats set AwardedXp = AwardedXp + ${Math.abs(xp)} where UserId = ${userId} and GuildId = ${guildId}`);
+	addGuildXp(userId, guildId, xp) {
+		this.checkEndpoint("addGuildXp");
+		this.checkIfUserExists(userId);
+		this.checkIfGuildExists(guildId);
+		const guildXp = this.db.prepare(`update UserXpStats set AwardedXp = AwardedXp + ${Math.abs(xp)} where UserId = ${userId} and GuildId = ${guildId}`).run();
+		if (!guildXp.changes) throw new Error("Unable to add guild Xp to this user.");
 		return this.getGuildXp(userId, guildId);
 	}
 
@@ -482,11 +414,12 @@ class Connector {
 	 * @param {String} xp XP to be subtracted.
 	 * @returns {Object} Information about the user's guild XP.
 	 */
-	async subtractGuildXp(userId, guildId, xp) {
-		await this.checkEndpoint("subtractGuildXp");
-		await this.checkIfUserExists(userId);
-		await this.checkIfGuildExists(guildId);
-		await this.db.raw(`update UserXpStats set AwardedXp = AwardedXp - ${Math.abs(xp)} where UserId = ${userId} and GuildId = ${guildId}`);
+	subtractGuildXp(userId, guildId, xp) {
+		this.checkEndpoint("subtractGuildXp");
+		this.checkIfUserExists(userId);
+		this.checkIfGuildExists(guildId);
+		const guildXp = this.db.prepare(`update UserXpStats set AwardedXp = AwardedXp - ${Math.abs(xp)} where UserId = ${userId} and GuildId = ${guildId}`).run();
+		if (!guildXp.changes) throw new Error("Unable to subtract guild Xp from this user.");
 		return this.getGuildXp(userId, guildId);
 	}
 
@@ -497,8 +430,8 @@ class Connector {
 	 * @param {String} xp XP to be awarded.
 	 * @returns {Object} Information about the user's guild XP.
 	 */
-	async awardGuildXp(userId, guildId, xp) {
-		await this.checkEndpoint("awardGuildXp");
+	awardGuildXp(userId, guildId, xp) {
+		this.checkEndpoint("awardGuildXp");
 		return xp > 0 ? this.addGuildXp(userId, guildId, xp) : this.subtractGuildXp(userId, guildId, xp);
 	}
 
@@ -509,19 +442,14 @@ class Connector {
 	 * @param {Number} items Items per page.
 	 * @returns {Object} Leaderboard page.
 	 */
-	async getGuildXpLeaderboard(guildId, startPosition = 0, items = 10) {
-		await this.checkEndpoint("getGuildXpLeaderboard");
-		await this.checkIfGuildExists(guildId);
-		const leaderboard = await this.db.raw(`select cast(UserId as text) as 'userId', Xp as 'xp', AwardedXp as 'awardedXp' from UserXpStats where GuildId=${guildId} order by (xp + awardedXp) desc limit ${items} offset ${startPosition}`);
-		if (!leaderboard || (Array.isArray(leaderboard) && leaderboard.length < 1))
-			throw new Error("Unable to fetch guild XP leaderboard.");
-		return Promise.all(leaderboard.map(async (user, rank) => {
-			const levelInfo = await this.calcLevel(user.xp + user.awardedXp);
-			return {
-				...user,
-				...levelInfo,
-				rank: startPosition + rank + 1
-			};
+	getGuildXpLeaderboard(guildId, startPosition = 0, items = 10) {
+		this.checkEndpoint("getGuildXpLeaderboard");
+		this.checkIfGuildExists(guildId);
+		const leaderboard = this.db.prepare(`select cast(UserId as text) as 'userId', Xp as 'xp', AwardedXp as 'awardedXp' from UserXpStats where GuildId=${guildId} order by (xp + awardedXp) desc limit ${items} offset ${startPosition}`).all();
+		if (!leaderboard.length) throw new Error("Unable to fetch guild XP leaderboard.");
+		return leaderboard.map((user, rank) => ({
+			...this.calcLevel(user.xp + user.awardedXp),
+			...user, rank: startPosition + rank + 1
 		}));
 	}
 
@@ -532,12 +460,11 @@ class Connector {
 	 * @param {Number} items Items per page.
 	 * @returns {Object} Role rewards page.
 	 */
-	async getGuildXpRoleRewards(guildId, startPosition = 0, items = 10) {
-		await this.checkEndpoint("getGuildXpRoleRewards");
-		await this.checkIfGuildExists(guildId);
-		const rewards = await this.db.raw(`select a.DateAdded as 'dateAdded', a.Level as 'level', cast (a.RoleId as text) as 'roleId' from XpRoleReward a, XpSettings b, GuildConfigs c where a.XpSettingsId = b.Id AND b.GuildConfigId = c.Id AND c.GuildId = ${guildId} order by a.Level asc limit ${items} offset ${startPosition}`);
-		if (!rewards || (Array.isArray(rewards) && rewards.length < 1))
-			throw new Error("Unable to fetch role rewards.");
+	getGuildXpRoleRewards(guildId, startPosition = 0, items = 10) {
+		this.checkEndpoint("getGuildXpRoleRewards");
+		this.checkIfGuildExists(guildId);
+		const rewards = this.db.prepare(`select a.DateAdded as 'dateAdded', a.Level as 'level', cast (a.RoleId as text) as 'roleId' from XpRoleReward a, XpSettings b, GuildConfigs c where a.XpSettingsId = b.Id AND b.GuildConfigId = c.Id AND c.GuildId = ${guildId} order by a.Level asc limit ${items} offset ${startPosition}`).all();
+		if (!rewards.length) throw new Error("Unable to fetch role rewards.");
 		return rewards;
 	}
 
@@ -548,12 +475,11 @@ class Connector {
 	 * @param {Number} items Items per page.
 	 * @returns {Object} Currency rewards page.
 	 */
-	async getGuildXpCurrencyRewards(guildId, startPosition = 0, items = 10) {
-		await this.checkEndpoint("getGuildXpCurrencyRewards");
-		await this.checkIfGuildExists(guildId);
-		const rewards = await this.db.raw(`select a.DateAdded as 'dateAdded', a.Level as 'level', a.Amount as 'amount' from XpCurrencyReward a, XpSettings b, GuildConfigs c where a.XpSettingsId = b.Id AND b.GuildConfigId = c.Id AND c.GuildId = ${guildId} order by a.Level asc limit ${items} offset ${startPosition}`);
-		if (!rewards || (Array.isArray(rewards) && rewards.length < 1))
-			throw new Error("Unable to fetch currency rewards.");
+	getGuildXpCurrencyRewards(guildId, startPosition = 0, items = 10) {
+		this.checkEndpoint("getGuildXpCurrencyRewards");
+		this.checkIfGuildExists(guildId);
+		const rewards = this.db.prepare(`select a.DateAdded as 'dateAdded', a.Level as 'level', a.Amount as 'amount' from XpCurrencyReward a, XpSettings b, GuildConfigs c where a.XpSettingsId = b.Id AND b.GuildConfigId = c.Id AND c.GuildId = ${guildId} order by a.Level asc limit ${items} offset ${startPosition}`).all();
+		if (!rewards.length) throw new Error("Unable to fetch currency rewards.");
 		return rewards;
 	}
 
@@ -562,14 +488,12 @@ class Connector {
 	 * @param {String} userId ID of the user to get global ranking of.
 	 * @returns {Object} Rank info.
 	 */
-	async getGlobalRank(userId) {
-		await this.checkEndpoint("getGlobalRank");
-		await this.checkIfUserExists(userId);
-		const globalRankings = await this.db.raw("select cast(UserId as text) as 'id' from DiscordUser order by TotalXp desc").map(user => user.id);
-		let rank = await globalRankings.indexOf(userId);
-		if (rank < 0)
-			rank = globalRankings.length;
-		return { userId, rank: ++rank };
+	getGlobalRank(userId) {
+		this.checkEndpoint("getGlobalRank");
+		this.checkIfUserExists(userId);
+		const globalRankings = this.db.prepare("select cast(UserId as text) as 'id' from DiscordUser order by TotalXp desc").all().map(user => user.id);
+		const rank = globalRankings.indexOf(userId) > -1 ? globalRankings.indexOf(userId) + 1 : globalRankings.length;
+		return { userId, rank };
 	}
 
 	/**
@@ -577,18 +501,15 @@ class Connector {
  	* @param {String} userId ID of the Discord user.
  	* @returns {Object} Information about the user's global XP.
  	*/
-	async getGlobalXp(userId) {
-		await this.checkEndpoint("getGlobalXp");
-		await this.checkIfUserExists(userId);
-		const [{ globalXp }] = await this.db.raw(`select TotalXp as 'globalXp' from DiscordUser where UserId=${userId}`);
-		if (!globalXp || (Array.isArray(globalXp) && globalXp.length < 1))
-			throw new Error("User not found.");
-		const levelInfo = await this.calcLevel(globalXp);
-		if (!levelInfo)
-			throw new Error("Unable to calculate level.");
-		const rankInfo = await this.getGlobalRank(userId);
-		if (!rankInfo)
-			throw new Error("Unable to get rank.");
+	getGlobalXp(userId) {
+		this.checkEndpoint("getGlobalXp");
+		this.checkIfUserExists(userId);
+		const { globalXp } = this.db.prepare(`select TotalXp as 'globalXp' from DiscordUser where UserId=${userId}`).get();
+		if (!globalXp) throw new Error("Unable to get global Xp for this user.");
+		const levelInfo = this.calcLevel(globalXp);
+		if (!levelInfo) throw new Error("Unable to calculate level.");
+		const rankInfo = this.getGlobalRank(userId);
+		if (!rankInfo) throw new Error("Unable to get rank.");
 		return { globalXp, ...levelInfo, rank: rankInfo.rank };
 	}
 
@@ -598,18 +519,14 @@ class Connector {
 	 * @param {Number} items Items per page.
 	 * @returns {Object} Leaderboard page.
 	 */
-	async getGlobalXpLeaderboard(startPosition = 0, items = 10) {
-		await this.checkEndpoint("getGlobalXpLeaderboard");
-		const leaderboard = await this.db.raw(`select cast(UserId as text) as 'userId', TotalXp as 'globalXp' from DiscordUser order by TotalXp desc limit ${items} offset ${startPosition}`);
-		if (!leaderboard || (Array.isArray(leaderboard) && leaderboard.length < 1))
-			throw new Error("Unable to fetch global XP leaderboard.");
-		return Promise.all(leaderboard.map(async (user, rank) => {
-			const levelInfo = await this.calcLevel(user.globalXp);
-			return {
-				...user,
-				...levelInfo,
-				rank: startPosition + rank + 1
-			};
+	getGlobalXpLeaderboard(startPosition = 0, items = 10) {
+		this.checkEndpoint("getGlobalXpLeaderboard");
+		const leaderboard = this.db.prepare(`select cast(UserId as text) as 'userId', TotalXp as 'globalXp' from DiscordUser order by TotalXp desc limit ${items} offset ${startPosition}`).all();
+		if (!leaderboard.length) throw new Error("Unable to fetch global XP leaderboard.");
+		return leaderboard.map((user, rank) => ({
+			...user,
+			...this.calcLevel(user.globalXp),
+			rank: startPosition + rank + 1
 		}));
 	}
 
@@ -619,18 +536,13 @@ class Connector {
 	 * @param {Number} items Items per page.
 	 * @returns {Object} Leaderboard page.
 	 */
-	async getClubLeaderboard(startPosition = 0, items = 10) {
-		await this.checkEndpoint("getClubLeaderboard");
-		const clubs = await this.db.raw(`select (a.Name || "#" || a.Discrim) as name, cast(b.UserId as text) as owner, a.Xp as xp, a.ImageUrl as icon, a.MinimumLevelReq as levelRequirement, a.Description as description from Clubs a, DiscordUser b WHERE a.OwnerId = b.Id order by a.Xp desc limit ${items} offset ${startPosition}`);
-		if (!clubs || (Array.isArray(clubs) && clubs.length < 1))
-			throw new Error("Unable to fetch clubs.");
-		return Promise.all(clubs.map(async (club, rank) => {
-			const levelInfo = await this.calcLevel(club.xp);
-			return {
-				...club,
-				...levelInfo,
-				rank: rank + 1
-			};
+	getClubLeaderboard(startPosition = 0, items = 10) {
+		this.checkEndpoint("getClubLeaderboard");
+		const clubs = this.db.prepare(`select (a.Name || "#" || a.Discrim) as name, cast(b.UserId as text) as owner, a.Xp as xp, a.ImageUrl as icon, a.MinimumLevelReq as levelRequirement, a.Description as description from Clubs a, DiscordUser b WHERE a.OwnerId = b.Id order by a.Xp desc limit ${items} offset ${startPosition}`).all();
+		if (!clubs.length) throw new Error("Unable to fetch clubs.");
+		return clubs.map((club, rank) => ({
+			...this.calcLevel(club.xp),
+			...club, rank: rank + 1
 		}));
 	}
 
@@ -639,25 +551,22 @@ class Connector {
 	 * @param {Number} name Name of the club.
 	 * @returns {Object} Information about the club.
 	 */
-	async getClubInfo(name) {
-		await this.checkEndpoint("getClubInfo");
-		const clubs = await this.db.raw(`select(a.Name || "#" || a.Discrim) as clubName, cast(b.UserId as text) as owner, a.Xp as xp, a.ImageUrl as icon, a.MinimumLevelReq as levelRequirement, a.Description as description from Clubs a, DiscordUser b WHERE a.OwnerId = b.Id AND clubName = "${name}"`);
-		if (!clubs || (Array.isArray(clubs) && clubs.length < 1))
-			throw new Error("No clubs exist with the specified name.");
-		const levelInfo = await this.calcLevel(clubs[0].xp);
-		if (!levelInfo)
-			throw new Error("Unable to calculate level info.");
-		const rankings = await this.db.raw("select (Name || \"#\" || Discrim) as name from Clubs order by Xp desc").map(club => club.name);
-		if (!rankings || (Array.isArray(rankings) && rankings.length < 1))
-			throw new Error("Unable to get club ranking.");
+	getClubInfo(name) {
+		this.checkEndpoint("getClubInfo");
+		const club = this.db.prepare(`select(a.Name || "#" || a.Discrim) as clubName, cast(b.UserId as text) as owner, a.Xp as xp, a.ImageUrl as icon, a.MinimumLevelReq as levelRequirement, a.Description as description from Clubs a, DiscordUser b WHERE a.OwnerId = b.Id AND clubName = "${name}"`).get();
+		if (!club) throw new Error("No clubs exist with the specified name.");
+		const levelInfo = this.calcLevel(club.xp);
+		if (!levelInfo) throw new Error("Unable to calculate level info.");
+		const rankings = this.db.prepare("select (Name || \"#\" || Discrim) as name from Clubs order by Xp desc").all().map(club => club.name);
+		if (!rankings.length) throw new Error("Unable to get club ranking.");
 		const rank = rankings.indexOf(name) < 0 ? rankings.length : rankings.indexOf(name) + 1;
 		return {
-			name: clubs[0].clubName,
-			owner: clubs[0].owner,
-			description: clubs[0].description,
-			icon: clubs[0].icon,
-			xp: clubs[0].xp,
-			levelRequirement: clubs[0].levelRequirement,
+			name: club.clubName,
+			owner: club.owner,
+			description: club.description,
+			icon: club.icon,
+			xp: club.xp,
+			levelRequirement: club.levelRequirement,
 			...levelInfo, rank
 		};
 	}
@@ -667,13 +576,12 @@ class Connector {
 	 * @param {Number} userId ID of the club member.
 	 * @returns {Object} Information about the club.
 	 */
-	async getClubInfoByUser(userId) {
-		await this.checkEndpoint("getClubInfoByUser");
-		await this.checkIfUserExists(userId);
-		const club = await this.db.raw(`select(a.Name || "#" || a.Discrim) as clubName from Clubs a, DiscordUser b WHERE b.ClubId = a.Id AND b.UserId = ${userId}`);
-		if (!club || (Array.isArray(club) && club.length < 0))
-			throw new Error("Club not found.");
-		return this.getClubInfo(club[0].clubName);
+	getClubInfoByUser(userId) {
+		this.checkEndpoint("getClubInfoByUser");
+		this.checkIfUserExists(userId);
+		const club = this.db.prepare(`select(a.Name || "#" || a.Discrim) as clubName from Clubs a, DiscordUser b WHERE b.ClubId = a.Id AND b.UserId = ${userId}`).get();
+		if (!club) throw new Error("Club not found.");
+		return this.getClubInfo(club.clubName);
 	}
 
 	/**
@@ -683,13 +591,12 @@ class Connector {
 	 * @param {Number} items Items per page.
 	 * @returns {Object} Members page.
 	 */
-	async getClubMembers(name, startPosition = 0, items = 10) {
-		await this.checkEndpoint("getClubMembers");
-		const members = await this.db.raw(`select cast(a.UserId as text) as userId, a.TotalXp as xp, a.IsClubAdmin as admin from DiscordUser a, Clubs b where a.ClubId = b.Id AND (b.Name || "#" || b.Discrim)="${name}" order by xp desc limit ${items} offset ${startPosition}`);
-		if (!members || (Array.isArray(members) && members.length < 0))
-			throw new Error("No members found.");
-		return Promise.all(members.map(async (member, rank) => {
-			const levelInfo = await this.calcLevel(member.xp);
+	getClubMembers(name, startPosition = 0, items = 10) {
+		this.checkEndpoint("getClubMembers");
+		const members = this.db.prepare(`select cast(a.UserId as text) as userId, a.TotalXp as xp, a.IsClubAdmin as admin from DiscordUser a, Clubs b where a.ClubId = b.Id AND (b.Name || "#" || b.Discrim)="${name}" order by xp desc limit ${items} offset ${startPosition}`).all();
+		if (!members.length) throw new Error("No members found for this club.");
+		return members.map((member, rank) => {
+			const levelInfo = this.calcLevel(member.xp);
 			return {
 				userId: member.userId,
 				admin: member.admin > 0,
@@ -698,7 +605,7 @@ class Connector {
 				levelXp: levelInfo.levelXp,
 				rank: rank + 1
 			};
-		}));
+		});
 	}
 }
 
