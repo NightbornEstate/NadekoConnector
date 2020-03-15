@@ -18,7 +18,7 @@
     "json-bigint": "^0.3.0",
     "jsonwebtoken": "^8.3.0",
     "knex": "^0.15.2",
-    "morgan": "^1.9.0",
+    "morgan": "^1.9.1",
     "sqlite3": "^4.0.2",
     "then-fs": "^2.0.0"
   },
