@@ -1,6 +1,6 @@
 {
   "name": "nadekoconnector",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Exposes parts of the NadekoBot database for modification through JSONWebTokens.",
   "main": "server.js",
   "scripts": {
