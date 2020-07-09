@@ -20,7 +20,7 @@
     "stringify-object": "^3.3.0"
   },
   "devDependencies": {
-    "eslint": "^5.13.0"
+    "eslint": "^5.16.0"
   },
   "repository": {
     "type": "git",
