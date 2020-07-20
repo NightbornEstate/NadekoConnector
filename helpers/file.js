@@ -1,7 +1,6 @@
 const { accessSync, readFileSync, writeFileSync, constants } = require("fs");
 const jsonbs = require("json-bigint")({ storeAsString: true });
 const { resolve, parse } = require("path");
-const jsStringify = require("stringify-object");
 
 /**
  * Represents a file.
@@ -124,15 +123,13 @@ module.exports = class File {
 	 * @param {Boolean} [createFile=false] Whether to create the file if it doesn't exist.
 	 */
 	write(data = {}, writeAsText = false, createFile = false) {
-		if (!this.writable && !createFile) throw new Error("File is not writable.");
+		if (!this.writable && !createFile)
+			throw new Error("File is not writable.");
 		try {
-			if (!writeAsText) {
+			if (!writeAsText)
 				if ((typeof data === "object" || (data.prototype && typeof data.prototype === "object")) && this.ext.toLowerCase() === ".json")
 					return this._write(jsonbs.stringify(data, null, "\t"));
-				if (this.ext.toLowerCase() === ".js")
-					return this._write(`module.exports = ${jsStringify(data, { indent: "\t", singleQuotes: false })};`);
-				else return this._write(data);
-			}
+			return this._write(data);
 		}
 		catch (error) {
 			this._errorHandler(error);
