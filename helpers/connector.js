@@ -11,7 +11,7 @@ class Connector {
 	 * @param {Boolean} readOnly Whether the connector should be read-only.
 	 */
 	constructor(databasePath, credentialsPath, disabledEndpoints, readOnly) {
-		this.db = new Database(databasePath, { memory: false, readonly: Boolean(readOnly), fileMustExist: true });
+		this.db = new Database(databasePath, {readonly: Boolean(readOnly), fileMustExist: true });
 		this.credentials = new File(credentialsPath, err => { throw err; }).read();
 
 		this._endpoints = [
